@@ -23,9 +23,9 @@ Underlying codec implementations are expected to reduce as much as possible thei
 
 There has been some very recent conversations (as in, about a month ago at the time of this writing) about this topic [5], and also some draft changes to the spec that add explicit wording about how to achieve "zero-information" for the case of the video codecs [6]:
 
-> 5.2 RTCRtpSender Interface
-> Attributes
-> track of type MediaStreamTrack
+> 5.2 RTCRtpSender Interface  
+> Attributes  
+> track of type MediaStreamTrack  
 > (...) [If track is disabled], the RTCRtpSender MUST send silence (audio), black frames (video) or a zero-information-content equivalent. In the case of video, the RTCRtpSender SHOULD send one black frame per second. If track is null then the RTCRtpSender does not send.
 
 [5]: https://github.com/webrtc/samples/pull/1009
@@ -76,10 +76,10 @@ Sadly, even if the `RTCRtpSender.replaceTrack(null)` feature seems like the idea
 
 This is the last of the methods explored for muting tracks. Its definition tells us that this method stops sending media from the corresponding RTCRtpSender, by means of setting the inner MediaStreamTrack to `null` [15]. This is just what we would like to achieve with the `RTCRtpSender.replaceTrack(null)` method described in the previous section, but the `removeTrack()` function call also has the undesired side effect of changing the stated direction of the stream, which is an action that triggers an SDP renegotiation:
 
-> 8. Set sender's [[SenderTrack]] to null.
-> 10. If transceiver's [[Direction]] slot is `sendrecv`, set transceiver's [[Direction]] slot to `recvonly`.
-> 11. If transceiver's [[Direction]] slot is `sendonly`, set transceiver's [[Direction]] slot to `inactive`.
-> 12. Update the negotiation-needed flag for connection.
+> 8. Set sender's [[SenderTrack]] to null.  
+> 10. If transceiver's [[Direction]] slot is `sendrecv`, set transceiver's [[Direction]] slot to `recvonly`.  
+> 11. If transceiver's [[Direction]] slot is `sendonly`, set transceiver's [[Direction]] slot to `inactive`.  
+> 12. Update the negotiation-needed flag for connection.  
 
 [15]: https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-removetrack
 
@@ -97,4 +97,4 @@ Now that all explored methods have been presented, this is a summary with the cu
 
 **C**. `RTCPeerConnection.removeTrack()` seems like the only solution which is currently well-supported by browsers and might provide the desired results. However, this is the option which brings more complexity to the table.
 
-One of the main requisites is to allow for almost-seamless switch between muted and unmuted states, and this introduces worries about how much time could be taken by both the media availability change and the SDP renegotiation, in the case of the method **C**. To explore this, this *mute-tracks* example code uses HTML and JavaScript to work with the corresponding browser API, in order to see how fast it is to change between modes. It allows to use both methods **A**, **B**, and **C** to mute any or both of the audio and the video tracks. You can use this demo to see that in both Chrome and Firefox the time taken to swap tracks is almost negligible.
+One of the main requisites is to allow for almost-seamless switch between muted and unmuted states, and this introduces worries about how much time could be taken by both the media availability change and the SDP renegotiation, in the case of the method **C**. To explore that, this experiment uses HTML and JavaScript to work with the corresponding browser API, in order to see how fast it is to change between modes. It allows to use both methods **A**, **B**, and **C** to mute any or both of the audio and the video tracks. You can use this demo to see that in both Chrome and Firefox the time taken to swap tracks is almost negligible.
