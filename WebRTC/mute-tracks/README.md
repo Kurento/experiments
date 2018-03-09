@@ -2,7 +2,10 @@
 
 Here we test different methods of muting audio or video tracks on a browser's [RTCPeerConnection] object. We have identified three methods to achieve this, with different levels of support in each one of the tested browsers (Chrome and Firefox).
 
+Preview this experiment in jsFiddle: [mute-tracks].
+
 [RTCPeerConnection]: https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection
+[mute-tracks]: http://jsfiddle.net/gh/get/library/pure/Kurento/experiments/tree/master/WebRTC/mute-tracks/
 
 
 
