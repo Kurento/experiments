@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <!-- <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests"> -->
+  <!--meta name="viewport" content="width=device-width, maximum-scale=0.5" /-->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-touch-fullscreen" content="yes">
+  <title>Test - negotiation</title>
+</head>
+
+<body>
+  <video id="v1" width="320" height="240" controls autoplay muted></video>
+  <video id="v2" width="320" height="240" controls autoplay></video>
+  <br>
+  <label><input type="checkbox" id="printSdpChk">Log whole SDP messages</label>
+  <br>
+  <label><input type="checkbox" id="vStartChk">Start VIDEO track (breaks on Firefox)</label>
+  <br>
+  <table><tr>
+    <td><button id="startBtn">Start</button></td>
+    <td><div id="statediv"></div></td>
+  </tr></table>
+  <br>
+  <label><input type="checkbox" id="aDisableChk" disabled>Disable AUDIO track</label>
+  <label><input type="checkbox" id="vDisableChk" disabled>Disable VIDEO track</label>
+  <br>
+  <label><input type="checkbox" id="aRemoveChk" disabled>Remove AUDIO track</label>
+  <label><input type="checkbox" id="vRemoveChk" disabled>Remove VIDEO track</label>
+  <br>
+  <label><input type="checkbox" id="aReplaceChk" disabled>Replace AUDIO track</label>
+  <label><input type="checkbox" id="vReplaceChk" disabled>Replace VIDEO track</label>
+  <br>
+  <div id="div"></div>
+  <br>
+  <div id="statsdiv"></div>
+  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+  <script src="mute-tracks.js"></script>
+</body>
+</html>
