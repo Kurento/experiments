@@ -4,8 +4,10 @@ Here we test different methods of muting audio or video tracks on a browser's [R
 
 Preview this experiment in jsFiddle: [mute-tracks].
 
+<script async src="//jsfiddle.net/j1elo/n3tf0rtL/embed/js,html,result/"></script>
+
 [RTCPeerConnection]: https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection
-[mute-tracks]: http://jsfiddle.net/gh/get/library/pure/Kurento/experiments/tree/master/WebRTC/mute-tracks/
+[mute-tracks]: https://jsfiddle.net/j1elo/n3tf0rtL/
 
 
 
