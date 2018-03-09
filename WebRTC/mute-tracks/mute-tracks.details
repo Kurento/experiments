@@ -1,10 +1,6 @@
-Everything before the line containing only '---' will not be parsed
-
 ---
- name: Kurento/experiments/mute-tracks
- description: Different methods of muting audio or video tracks on a browser's RTCPeerConnection object.
- authors:
-   - Juan Navarro (https://github.com/j1elo)
- ...
-
-Everything after the line containing only '...' will not be parsed
+name: Kurento/experiments/mute-tracks
+description: Different methods of muting audio or video tracks on a browser's RTCPeerConnection object.
+authors:
+  - Juan Navarro (github.com/j1elo)
+...
