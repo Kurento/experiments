@@ -4,7 +4,7 @@ Here we test different methods of muting audio or video tracks on a browser's [R
 
 Preview this experiment in jsFiddle: [mute-tracks].
 
-<script async src="//jsfiddle.net/j1elo/n3tf0rtL/embed/js,html,result/"></script>
+<iframe width="100%" height="300" src="//jsfiddle.net/j1elo/n3tf0rtL/embedded/js,html,result/" allowpaymentrequest allowfullscreen="allowfullscreen" frameborder="0"></iframe>
 
 [RTCPeerConnection]: https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection
 [mute-tracks]: https://jsfiddle.net/j1elo/n3tf0rtL/
