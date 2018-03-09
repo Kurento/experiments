@@ -88,8 +88,10 @@ This change in the direction, and the required SDP renegotiation, introduces com
 
 Now that all explored methods have been presented, this is a summary with the current situation and problems of each one:
 
-A. `MediaStreamTrack.enabled` is the officially supported way to mute tracks, but it relies on the underlying codecs to provide an optimized mode for producing "zero-content" data. Current implementations won't take care of that, and the official conversations in this respect have barely started.
-B. `RTCRtpSender.replaceTrack(null)` seems like the **ideal solution**, and even people who form part of the WebRTC working groups are showcasing this feature in their internal / unofficial test pages. However, it is just too early to rely on this feature, as we may be several months ahead of having a stable implementation across browsers.
-C. `RTCPeerConnection.removeTrack()` seems like the only solution which is currently well-supported by browsers and might provide the desired results. However, this is the option which brings more complexity to the table.
+**A**. `MediaStreamTrack.enabled` is the officially supported way to mute tracks, but it relies on the underlying codecs to provide an optimized mode for producing "zero-content" data. Current implementations won't take care of that, and the official conversations in this respect have barely started.
+
+**B**. `RTCRtpSender.replaceTrack(null)` seems like the **ideal solution**, and even people who form part of the WebRTC working groups are showcasing this feature in their internal / unofficial test pages. However, it is just too early to rely on this feature, as we may be several months ahead of having a stable implementation across browsers.
+
+**C**. `RTCPeerConnection.removeTrack()` seems like the only solution which is currently well-supported by browsers and might provide the desired results. However, this is the option which brings more complexity to the table.
 
 One of the main requisites is to allow for almost-seamless switch between muted and unmuted states, and this introduces worries about how much time could be taken by both the media availability change and the SDP renegotiation, in the case of the method **C**. To explore this, this *mute-tracks* example code uses HTML and JavaScript to work with the corresponding browser API, in order to see how fast it is to change between modes. It allows to use both methods **A**, **B**, and **C** to mute any or both of the audio and the video tracks. You can use this demo to see that in both Chrome and Firefox the time taken to swap tracks is almost negligible.
