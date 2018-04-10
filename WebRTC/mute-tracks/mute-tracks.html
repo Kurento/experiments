@@ -13,9 +13,11 @@
   <video id="v1" width="320" height="240" autoplay controls playsinline muted></video>
   <video id="v2" width="320" height="240" autoplay controls playsinline></video>
   <br>
+  <label><input type="checkbox" id="vStartChk">Start VIDEO track</label>
+  <br>
   <label><input type="checkbox" id="printSdpChk">Log whole SDP messages</label>
   <br>
-  <label><input type="checkbox" id="vStartChk">Start VIDEO track (breaks on Firefox)</label>
+  <label><input type="checkbox" id="strictDirChk">Force sendonly/recvonly in SDP</label>
   <br>
   <table><tr>
     <td><button id="startBtn">Start</button></td>

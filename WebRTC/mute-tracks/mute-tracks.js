@@ -13,7 +13,13 @@ pc1.onnegotiationneeded = (ev) => {
   }
   log("[onnegotiationneeded] pc1");
   isNegotiating = true;
-  pc1.createOffer()
+  const options = {};
+  if (strictDirChk.checked) {
+    options.offerToReceiveAudio = false;
+    options.offerToReceiveVideo = false;
+  }
+  console.log("[onnegotiationneeded] pc1.createOffer()");
+  pc1.createOffer(options)
     .then((offer) => {
       if (printSdpChk.checked) {
         console.log("[onnegotiationneeded] pc1 SDP Offer: " + offer.sdp);
