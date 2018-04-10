@@ -8,23 +8,39 @@ pc2.onicecandidate = (ev) => addCandidate(pc1, ev.candidate);
 var isNegotiating = false; // Workaround for Chrome: skip nested negotiations
 pc1.onnegotiationneeded = (ev) => {
   if (isNegotiating) {
-    log("PC1: onnegotiationneeded (Chrome bug - SKIP)");
+    log("[onnegotiationneeded] pc1 (Chrome bug - SKIP)");
     return;
   }
-  log("PC1: onnegotiationneeded");
+  log("[onnegotiationneeded] pc1");
   isNegotiating = true;
   pc1.createOffer()
-    .then((offer) => pc1.setLocalDescription(offer))
-    .then(() => {
+    .then((offer) => {
       if (printSdpChk.checked) {
-        console.log("PC1: NEW OFFER: " + pc1.localDescription.sdp);
+        console.log("[onnegotiationneeded] pc1 SDP Offer: " + offer.sdp);
       }
+      console.log("[onnegotiationneeded] pc1.setLocalDescription()");
+      return pc1.setLocalDescription(offer);
+    })
+    .then(() => {
+      console.log("[onnegotiationneeded] pc2.setRemoteDescription()");
       return pc2.setRemoteDescription(pc1.localDescription);
     })
-    .then(() => pc2.createAnswer())
-    .then((answer) => pc2.setLocalDescription(answer))
-    .then(() => pc1.setRemoteDescription(pc2.localDescription))
-    .catch((err) => log(err));
+    .then(() => {
+      console.log("[onnegotiationneeded] pc2.createAnswer()");
+      return pc2.createAnswer();
+    })
+    .then((answer) => {
+      if (printSdpChk.checked) {
+        console.log("[onnegotiationneeded] pc2 SDP Answer: " + answer.sdp);
+      }
+      console.log("[onnegotiationneeded] pc2.setLocalDescription()");
+      return pc2.setLocalDescription(answer);
+    })
+    .then(() => {
+      console.log("[onnegotiationneeded] pc1.setRemoteDescription()");
+      return pc1.setRemoteDescription(pc2.localDescription);
+    })
+    .catch((err) => log("[onnegotiationneeded] Error: " + err));
 }
 
 pc1.onsignalingstatechange = (ev) => { // Workaround for Chrome: skip nested negotiations
@@ -33,11 +49,14 @@ pc1.onsignalingstatechange = (ev) => { // Workaround for Chrome: skip nested neg
 
 pc2.oniceconnectionstatechange = () => update(statediv, pc2.iceConnectionState);
 
-//- Firefox (native) / Chrome (adapter.js polyfill)
-pc2.ontrack = (ev) => v2.srcObject = ev.streams[0];
-//----
-//- Firefox (native) / Chrome (native) / (DEPRECATED)
-// pc2.onaddstream = (ev) => v2.srcObject = ev.stream;
+// Choose one: ontrack / onaddstream
+// ----
+// Option 1: ontrack (preferred)
+pc2.ontrack = (trackEvent) => v2.srcObject = trackEvent.streams[0];
+// ----
+// Option 2: onaddstream (DEPRECATED)
+// pc2.onaddstream = (streamEvent) => v2.srcObject = streamEvent.stream;
+// ----
 
 var avStream;
 var aSender, aTrack;
@@ -45,18 +64,21 @@ var vSender, vTrack;
 
 function disableTrack(isActive, isAudio)
 {
+  // https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack-enabled
+
   (isAudio ? aTrack : vTrack).enabled = !isActive;
 
   // Update UI
   (isAudio ? aReplaceChk : vReplaceChk).disabled = isActive;
   (isAudio ? aRemoveChk : vRemoveChk).disabled = isActive;
-  log((isAudio ? "AUDIO" : "VIDEO") + " "
-      + (isActive ? "DISABLE (ON)" : "DISABLE (OFF)"));
+  log("[disableTrack]" + (isAudio ? " AUDIO" : " VIDEO")
+      + (isActive ? " DISABLE (ON)" : " DISABLE (OFF)"));
 }
 
 function replaceTrack(isActive, isAudio)
 {
   // https://www.w3.org/TR/webrtc/#dom-rtcrtpsender-replacetrack
+
   let track;
   if (isActive) { track = null; }
   else { track = (isAudio ? aTrack : vTrack); }
@@ -66,13 +88,13 @@ function replaceTrack(isActive, isAudio)
       // Update UI
       (isAudio ? aDisableChk : vDisableChk).disabled = isActive;
       (isAudio ? aRemoveChk : vRemoveChk).disabled = isActive;
-      log((isAudio ? "AUDIO" : "VIDEO")
+      log("[replaceTrack]" + (isAudio ? " AUDIO" : " VIDEO")
           + (isActive ? " REPLACE (ON)" : " REPLACE (OFF)"));
     })
     .catch((err) => {
       // Update UI (rollback)
       (isAudio ? aReplaceChk : vReplaceChk).checked = !isActive;
-      log("REPLACE TRACK FAILED: " + err);
+      log("[replaceTrack] Error in sender.replaceTrack(): " + err);
     });
 }
 
@@ -80,30 +102,29 @@ function removeTrack(isActive, isAudio)
 {
   // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-addtrack
   // https://www.w3.org/TR/webrtc/#dom-rtcrtpsender-replacetrack
+
   let sender = (isAudio ? aSender : vSender);
   let track = (isAudio ? aTrack : vTrack);
 
   if (isActive) {
     try {
-      // removeTrack() triggers onnegotiationneeded
-      pc1.removeTrack(sender);
+      pc1.removeTrack(sender); // removeTrack() triggers onnegotiationneeded
     }
     catch (err) {
       // Update UI (rollback)
       (isAudio ? aRemoveChk : vRemoveChk).checked = !isActive;
-      log("REMOVE TRACK FAILED: " + err);
+      log("[removeTrack] Error in pc1.removeTrack(): " + err);
       return;
     }
   }
   else {
     try {
-      // addTrack() triggers onnegotiationneeded
-      sender = pc1.addTrack(track, avStream);
+      sender = pc1.addTrack(track, avStream); // addTrack() triggers onnegotiationneeded
     }
     catch (err) {
       // Update UI (rollback)
       (isAudio ? aRemoveChk : vRemoveChk).checked = !isActive;
-      log("ADD TRACK FAILED: " + err);
+      log("[removeTrack] Error in pc1.addTrack(): " + err);
       return;
     }
     if (isAudio) { aSender = sender; }
@@ -113,7 +134,7 @@ function removeTrack(isActive, isAudio)
   // Update UI
   (isAudio ? aDisableChk : vDisableChk).disabled = isActive;
   (isAudio ? aReplaceChk : vReplaceChk).disabled = isActive;
-  log((isAudio ? "AUDIO" : "VIDEO")
+  log("[removeTrack]" + (isAudio ? " AUDIO" : " VIDEO")
       + (isActive ? " REMOVE (ON)" : " REMOVE (OFF)"));
 }
 
@@ -132,26 +153,26 @@ startBtn.onclick = () => {
       avStream = stream;
       v1.srcObject = avStream;
 
-      // Get audio track
+      // Choose one: addTrack / addStream
+      // ----
+      // Option 1: addTrack() (preferred)
       aTrack = avStream.getAudioTracks()[0];
-
-      //- Firefox (native) / Chrome (adapter.js polyfill)
       log("[getUserMedia] New track: " + aTrack.kind);
-      aSender = pc1.addTrack(aTrack, avStream);
-      //----
-      //- Firefox (native) / Chrome (native) / (DEPRECATED)
-      // log("Add stream: audio + video");
-      // pc1.addStream(avStream);
-      // aSender = pc1.getSenders().find((sender) => sender.track == aTrack);
-
+      aSender = pc1.addTrack(aTrack, avStream); // addTrack() triggers onnegotiationneeded
       if (useVideo) {
-        // Get video track
         vTrack = avStream.getVideoTracks()[0];
         log("[getUserMedia] New track: " + vTrack.kind);
-        vSender = pc1.addTrack(vTrack, avStream);
+        vSender = pc1.addTrack(vTrack, avStream); // addTrack() triggers onnegotiationneeded
       }
+      // ----
+      // Option 2: addStream() (DEPRECATED)
+      // log("[getUserMedia] New stream (audio + video)");
+      // pc1.addStream(avStream); // addStream() triggers onnegotiationneeded
+      // aTrack = avStream.getAudioTracks()[0];
+      // aSender = pc1.getSenders().find((sender) => sender.track == aTrack);
+      // ----
     })
-    .catch((err) => log(err));
+    .catch((err) => log("[getUserMedia] Error: " + err));
 
   // Program regular updating of stats
   repeat(100, () => Promise.all([pc1.getStats(), pc2.getStats()])
@@ -172,6 +193,9 @@ startBtn.onclick = () => {
   .catch(err => log(err));
 
   // Update UI
+  vStartChk.disabled = true;
+  printSdpChk.disabled = true;
+  strictDirChk.disabled = true;
   startBtn.disabled = true;
   aDisableChk.disabled = false;
   aReplaceChk.disabled = false;
