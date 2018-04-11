@@ -107,7 +107,7 @@ function replaceTrack(isActive, isAudio)
 function removeTrack(isActive, isAudio)
 {
   // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-addtrack
-  // https://www.w3.org/TR/webrtc/#dom-rtcrtpsender-replacetrack
+  // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-removetrack
 
   let sender = (isAudio ? aSender : vSender);
   let track = (isAudio ? aTrack : vTrack);
