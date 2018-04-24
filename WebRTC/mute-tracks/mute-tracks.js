@@ -1,11 +1,11 @@
-var pc1 = new RTCPeerConnection();
-var pc2 = new RTCPeerConnection();
+const pc1 = new RTCPeerConnection();
+const pc2 = new RTCPeerConnection();
 
-var addCandidate = (pc, can) => can && pc.addIceCandidate(can).catch(log);
+const addCandidate = (pc, can) => can && pc.addIceCandidate(can).catch(log);
 pc1.onicecandidate = (ev) => addCandidate(pc2, ev.candidate);
 pc2.onicecandidate = (ev) => addCandidate(pc1, ev.candidate);
 
-var isNegotiating = false; // Workaround for Chrome bug #740501: skip nested negotiations
+let isNegotiating = false; // Workaround for Chrome bug #740501: skip nested negotiations
 pc1.onnegotiationneeded = (ev) => {
   if (isNegotiating) {
     log("[onnegotiationneeded] pc1 (Chrome bug #740501 - SKIP)");
@@ -64,49 +64,62 @@ pc2.ontrack = (trackEvent) => v2.srcObject = trackEvent.streams[0];
 // pc2.onaddstream = (streamEvent) => v2.srcObject = streamEvent.stream;
 // ----
 
-var avStream;
-var aSender, aTrack;
-var vSender, vTrack;
+// ------------ Mute logic ------------
+
+function StateVars(disableChk, replaceChk, removeChk, track, sender) {
+  this.disableChk = disableChk || null;  // <input type="checkbox">
+  this.replaceChk = replaceChk || null;  // <input type="checkbox">
+  this.removeChk = removeChk || null;    // <input type="checkbox">
+  this.track = track || null;            // MediaStreamTrack
+  this.sender = sender || null;          // RTCRtpSender
+}
+
+const audioVars = new StateVars(aDisableChk, aReplaceChk, aRemoveChk);
+const videoVars = new StateVars(vDisableChk, vReplaceChk, vRemoveChk);
+let avStream;
 
 function disableTrack(isActive, isAudio)
 {
   // https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack-enabled
 
+  const vars = (isAudio ? audioVars : videoVars);
+
   log("[disableTrack] Set " + (isAudio ? "AUDIO" : "VIDEO") + " DISABLE "
       + (isActive ? "ON" : "OFF"));
 
-  (isAudio ? aTrack : vTrack).enabled = !isActive;
+  vars.track.enabled = !isActive;
 
-  // Update UI
-  (isAudio ? aReplaceChk : vReplaceChk).disabled = isActive;
-  (isAudio ? aRemoveChk : vRemoveChk).disabled = isActive;
   log("[disableTrack] " + (isAudio ? "AUDIO" : "VIDEO") + " DISABLE is "
       + (isActive ? "ON" : "OFF"));
+
+  // Update UI
+  vars.replaceChk.disabled = isActive;
+  vars.removeChk.disabled = isActive;
 }
 
 function replaceTrack(isActive, isAudio)
 {
   // https://www.w3.org/TR/webrtc/#dom-rtcrtpsender-replacetrack
 
+  const vars = (isAudio ? audioVars : videoVars);
+
   let track;
   if (isActive) { track = null; }
-  else { track = (isAudio ? aTrack : vTrack); }
+  else { track = vars.track; }
 
   log("[replaceTrack] Set " + (isAudio ? "AUDIO" : "VIDEO") + " REPLACE "
       + (isActive ? "ON" : "OFF"));
 
-  (isAudio ? aSender : vSender).replaceTrack(track)
+  vars.sender.replaceTrack(track)
     .then(() => {
-      // Update UI
-      (isAudio ? aDisableChk : vDisableChk).disabled = isActive;
-      (isAudio ? aRemoveChk : vRemoveChk).disabled = isActive;
       log("[replaceTrack] " + (isAudio ? "AUDIO" : "VIDEO") + " REPLACE is "
           + (isActive ? "ON" : "OFF"));
+
+      // Update UI
+      vars.disableChk.disabled = isActive;
+      vars.removeChk.disabled = isActive;
     })
     .catch((err) => {
-      // Update UI (rollback)
-      (isAudio ? aReplaceChk : vReplaceChk).checked = !isActive;
-
       if (err.name === 'InvalidModificationError') {
         log("[replaceTrack] Error in sender.replaceTrack(): Renegotiation needed, error: "
             + err);
@@ -114,6 +127,9 @@ function replaceTrack(isActive, isAudio)
       else {
         log("[replaceTrack] Error in sender.replaceTrack(): " + err);
       }
+
+      // Update UI (rollback)
+      vars.replaceChk.checked = !isActive;
     });
 }
 
@@ -122,46 +138,46 @@ function removeTrack(isActive, isAudio)
   // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-addtrack
   // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-removetrack
 
-  let sender = (isAudio ? aSender : vSender);
-  let track = (isAudio ? aTrack : vTrack);
+  const vars = (isAudio ? audioVars : videoVars);
 
   log("[removeTrack] Set " + (isAudio ? "AUDIO" : "VIDEO") + " REMOVE "
       + (isActive ? "ON" : "OFF"));
 
   if (isActive) {
     try {
-      pc1.removeTrack(sender);
+      pc1.removeTrack(vars.sender);
       // removeTrack() triggers onnegotiationneeded
     }
     catch (err) {
-      // Update UI (rollback)
-      (isAudio ? aRemoveChk : vRemoveChk).checked = !isActive;
-
       log("[removeTrack] Error in pc1.removeTrack(): " + err);
+
+      // Update UI (rollback)
+      vars.removeChk.checked = !isActive;
+
       return;
     }
   }
   else {
     try {
-      sender = pc1.addTrack(track, avStream);
+      vars.sender = pc1.addTrack(vars.track, avStream);
       // addTrack() triggers onnegotiationneeded
     }
     catch (err) {
-      // Update UI (rollback)
-      (isAudio ? aRemoveChk : vRemoveChk).checked = !isActive;
-
       log("[removeTrack] Error in pc1.addTrack(): " + err);
+
+      // Update UI (rollback)
+      vars.removeChk.checked = !isActive;
+
       return;
     }
-    if (isAudio) { aSender = sender; }
-    else { vSender = sender; }
   }
 
-  // Update UI
-  (isAudio ? aDisableChk : vDisableChk).disabled = isActive;
-  (isAudio ? aReplaceChk : vReplaceChk).disabled = isActive;
   log("[removeTrack] " + (isAudio ? "AUDIO" : "VIDEO") + " REMOVE is "
       + (isActive ? "ON" : "OFF"));
+
+  // Update UI
+  vars.disableChk.disabled = isActive;
+  vars.replaceChk.disabled = isActive;
 }
 
 aDisableChk.onclick = () => disableTrack(aDisableChk.checked, true);
@@ -172,7 +188,7 @@ aRemoveChk.onclick = () => removeTrack(aRemoveChk.checked, true);
 vRemoveChk.onclick = () => removeTrack(vRemoveChk.checked, false);
 
 startBtn.onclick = () => {
-  let useVideo = vStartChk.checked;
+  const useVideo = vStartChk.checked;
 
   navigator.mediaDevices.getUserMedia({ video: useVideo, audio: true })
     .then((stream) => {
@@ -182,22 +198,23 @@ startBtn.onclick = () => {
       // Choose one: addTrack / addStream
       // ----
       // Option 1: addTrack() (preferred)
-      aTrack = avStream.getAudioTracks()[0];
-      log("[getUserMedia] New track: " + aTrack.kind);
-      aSender = pc1.addTrack(aTrack, avStream);
+      audioVars.track = avStream.getAudioTracks()[0];
+      log("[getUserMedia] New track: " + audioVars.track.kind);
+      audioVars.sender = pc1.addTrack(audioVars.track, avStream);
       // addTrack() triggers onnegotiationneeded
       if (useVideo) {
-        vTrack = avStream.getVideoTracks()[0];
-        log("[getUserMedia] New track: " + vTrack.kind);
-        vSender = pc1.addTrack(vTrack, avStream);
+        videoVars.track = avStream.getVideoTracks()[0];
+        log("[getUserMedia] New track: " + videoVars.track.kind);
+        videoVars.sender = pc1.addTrack(videoVars.track, avStream);
         // addTrack() triggers onnegotiationneeded
       }
       // ----
       // Option 2: addStream() (DEPRECATED)
       // log("[getUserMedia] New stream (audio + video)");
       // pc1.addStream(avStream); // addStream() triggers onnegotiationneeded
-      // aTrack = avStream.getAudioTracks()[0];
-      // aSender = pc1.getSenders().find((sender) => sender.track == aTrack);
+      // audioVars.track = avStream.getAudioTracks()[0];
+      // audioVars.sender = pc1.getSenders().find(
+      //     (s) => s.track == audioVars.track);
       // ----
     })
     .catch((err) => log("[getUserMedia] Error: " + err));
@@ -205,7 +222,7 @@ startBtn.onclick = () => {
   // Program regular updating of stats
   repeat(100, () => Promise.all([pc1.getStats(), pc2.getStats()])
     .then(([s1, s2]) => {
-      var s = "";
+      let s = "";
       s1.forEach(stat => {
         if (stat.type == "outbound-rtp" && !stat.isRemote) {
           s += "<h4>Sender side</h4>" + dumpStats(stat);
