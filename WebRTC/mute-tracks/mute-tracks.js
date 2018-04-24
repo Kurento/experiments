@@ -5,10 +5,10 @@ var addCandidate = (pc, can) => can && pc.addIceCandidate(can).catch(log);
 pc1.onicecandidate = (ev) => addCandidate(pc2, ev.candidate);
 pc2.onicecandidate = (ev) => addCandidate(pc1, ev.candidate);
 
-var isNegotiating = false; // Workaround for Chrome: skip nested negotiations
+var isNegotiating = false; // Workaround for Chrome bug #740501: skip nested negotiations
 pc1.onnegotiationneeded = (ev) => {
   if (isNegotiating) {
-    log("[onnegotiationneeded] pc1 (Chrome bug - SKIP)");
+    log("[onnegotiationneeded] pc1 (Chrome bug #740501 - SKIP)");
     return;
   }
   log("[onnegotiationneeded] pc1");
@@ -72,13 +72,16 @@ function disableTrack(isActive, isAudio)
 {
   // https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack-enabled
 
+  log("[disableTrack] Set " + (isAudio ? "AUDIO" : "VIDEO") + " DISABLE "
+      + (isActive ? "ON" : "OFF"));
+
   (isAudio ? aTrack : vTrack).enabled = !isActive;
 
   // Update UI
   (isAudio ? aReplaceChk : vReplaceChk).disabled = isActive;
   (isAudio ? aRemoveChk : vRemoveChk).disabled = isActive;
-  log("[disableTrack]" + (isAudio ? " AUDIO" : " VIDEO")
-      + (isActive ? " DISABLE (ON)" : " DISABLE (OFF)"));
+  log("[disableTrack] " + (isAudio ? "AUDIO" : "VIDEO") + " DISABLE is "
+      + (isActive ? "ON" : "OFF"));
 }
 
 function replaceTrack(isActive, isAudio)
@@ -89,18 +92,28 @@ function replaceTrack(isActive, isAudio)
   if (isActive) { track = null; }
   else { track = (isAudio ? aTrack : vTrack); }
 
+  log("[replaceTrack] Set " + (isAudio ? "AUDIO" : "VIDEO") + " REPLACE "
+      + (isActive ? "ON" : "OFF"));
+
   (isAudio ? aSender : vSender).replaceTrack(track)
     .then(() => {
       // Update UI
       (isAudio ? aDisableChk : vDisableChk).disabled = isActive;
       (isAudio ? aRemoveChk : vRemoveChk).disabled = isActive;
-      log("[replaceTrack]" + (isAudio ? " AUDIO" : " VIDEO")
-          + (isActive ? " REPLACE (ON)" : " REPLACE (OFF)"));
+      log("[replaceTrack] " + (isAudio ? "AUDIO" : "VIDEO") + " REPLACE is "
+          + (isActive ? "ON" : "OFF"));
     })
     .catch((err) => {
       // Update UI (rollback)
       (isAudio ? aReplaceChk : vReplaceChk).checked = !isActive;
-      log("[replaceTrack] Error in sender.replaceTrack(): " + err);
+
+      if (err.name === 'InvalidModificationError') {
+        log("[replaceTrack] Error in sender.replaceTrack(): Renegotiation needed, error: "
+            + err);
+      }
+      else {
+        log("[replaceTrack] Error in sender.replaceTrack(): " + err);
+      }
     });
 }
 
@@ -112,24 +125,31 @@ function removeTrack(isActive, isAudio)
   let sender = (isAudio ? aSender : vSender);
   let track = (isAudio ? aTrack : vTrack);
 
+  log("[removeTrack] Set " + (isAudio ? "AUDIO" : "VIDEO") + " REMOVE "
+      + (isActive ? "ON" : "OFF"));
+
   if (isActive) {
     try {
-      pc1.removeTrack(sender); // removeTrack() triggers onnegotiationneeded
+      pc1.removeTrack(sender);
+      // removeTrack() triggers onnegotiationneeded
     }
     catch (err) {
       // Update UI (rollback)
       (isAudio ? aRemoveChk : vRemoveChk).checked = !isActive;
+
       log("[removeTrack] Error in pc1.removeTrack(): " + err);
       return;
     }
   }
   else {
     try {
-      sender = pc1.addTrack(track, avStream); // addTrack() triggers onnegotiationneeded
+      sender = pc1.addTrack(track, avStream);
+      // addTrack() triggers onnegotiationneeded
     }
     catch (err) {
       // Update UI (rollback)
       (isAudio ? aRemoveChk : vRemoveChk).checked = !isActive;
+
       log("[removeTrack] Error in pc1.addTrack(): " + err);
       return;
     }
@@ -140,8 +160,8 @@ function removeTrack(isActive, isAudio)
   // Update UI
   (isAudio ? aDisableChk : vDisableChk).disabled = isActive;
   (isAudio ? aReplaceChk : vReplaceChk).disabled = isActive;
-  log("[removeTrack]" + (isAudio ? " AUDIO" : " VIDEO")
-      + (isActive ? " REMOVE (ON)" : " REMOVE (OFF)"));
+  log("[removeTrack] " + (isAudio ? "AUDIO" : "VIDEO") + " REMOVE is "
+      + (isActive ? "ON" : "OFF"));
 }
 
 aDisableChk.onclick = () => disableTrack(aDisableChk.checked, true);
@@ -164,11 +184,13 @@ startBtn.onclick = () => {
       // Option 1: addTrack() (preferred)
       aTrack = avStream.getAudioTracks()[0];
       log("[getUserMedia] New track: " + aTrack.kind);
-      aSender = pc1.addTrack(aTrack, avStream); // addTrack() triggers onnegotiationneeded
+      aSender = pc1.addTrack(aTrack, avStream);
+      // addTrack() triggers onnegotiationneeded
       if (useVideo) {
         vTrack = avStream.getVideoTracks()[0];
         log("[getUserMedia] New track: " + vTrack.kind);
-        vSender = pc1.addTrack(vTrack, avStream); // addTrack() triggers onnegotiationneeded
+        vSender = pc1.addTrack(vTrack, avStream);
+        // addTrack() triggers onnegotiationneeded
       }
       // ----
       // Option 2: addStream() (DEPRECATED)
