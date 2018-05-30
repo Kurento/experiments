@@ -16,9 +16,15 @@
 
 const ws = new WebSocket('wss://' + location.host + '/helloworld');
 
-let videoInput;
-let videoOutput;
 let webRtcPeer;
+
+// UI
+let uiLocalVideo;
+let uiRemoteVideo;
+let uiState = null;
+const UI_IDLE = 0;
+const UI_STARTING = 1;
+const UI_STARTED = 2;
 
 // Safari User Reports
 let uiReportLbl;
@@ -29,27 +35,20 @@ const REPORT_STATUS_CONNECTING = 0;
 const REPORT_STATUS_FLOWING = 1;
 const REPORT_STATUS_PLAYING = 2;
 
-// UI
-let uiState = null;
-const UI_IDLE = 0;
-const UI_STARTING = 1;
-const UI_STARTED = 2;
-
 window.onload = function()
 {
   console = new Console();
   console.log("Page loaded");
-  videoInput = document.getElementById('videoInput');
-  videoOutput = document.getElementById('videoOutput');
+  uiLocalVideo = document.getElementById('uiLocalVideo');
+  uiRemoteVideo = document.getElementById('uiRemoteVideo');
   uiSetState(UI_IDLE);
 
   // Safari User Reports
   uiReportLbl = document.getElementById('uiReportLbl');
   uiStatusLbl = document.getElementById('uiStatusLbl');
-  videoOutput.oncanplaythrough = () => {
+  uiRemoteVideo.oncanplaythrough = () => {
     reportStatus = REPORT_STATUS_PLAYING;
     uiStatusLbl.value = "PLAYING, all good!";
-
     sendMessage({
       id: 'REPORT_REMOTE_PLAYING',
     });
@@ -59,6 +58,7 @@ window.onload = function()
 
 window.onbeforeunload = function()
 {
+  console.log("Page unload - Close WebSocket");
   ws.close();
 }
 
@@ -128,12 +128,12 @@ ws.onmessage = function(message)
     case 'ERROR':
       handleError(jsonMessage);
       break;
-    
+
     // Safari User Reports
     case 'STATUS':
       handleStatus(jsonMessage);
       break;
-    
+
     default:
       // Ignore the message
       console.warn("[onmessage] Invalid message, id: " + jsonMessage.id);
@@ -160,7 +160,7 @@ function handleProcessSdpAnswer(jsonMessage)
     }
 
     console.log("[handleProcessSdpAnswer] SDP Answer ready; start remote video");
-    startVideo(videoOutput);
+    startVideo(uiRemoteVideo);
 
     uiSetState(UI_STARTED);
   });
@@ -206,7 +206,7 @@ function stop()
   }
 
   uiSetState(UI_IDLE);
-  hideSpinner(videoInput, videoOutput);
+  hideSpinner(uiLocalVideo, uiRemoteVideo);
 
   sendMessage({
     id: 'STOP',
@@ -262,7 +262,7 @@ function uiStart()
 {
   console.log("[start] Create WebRtcPeerSendrecv");
   uiSetState(UI_STARTING);
-  showSpinner(videoInput, videoOutput);
+  showSpinner(uiLocalVideo, uiRemoteVideo);
 
   // Safari User Reports
   sendMessage({
@@ -270,10 +270,9 @@ function uiStart()
   });
 
   const options = {
-    localVideo: videoInput,
-    remoteVideo: videoOutput,
+    localVideo: uiLocalVideo,
+    remoteVideo: uiRemoteVideo,
     mediaConstraints: { audio: true, video: true },
-    //J mediaConstraints: { audio: false, video: true },
     onicecandidate: (candidate) => sendMessage({
       id: 'ADD_ICE_CANDIDATE',
       candidate: candidate,
@@ -291,7 +290,7 @@ function uiStart()
     }
 
     console.log("[start/WebRtcPeerSendrecv] Created; start local video");
-    startVideo(videoInput);
+    startVideo(uiLocalVideo);
 
     // Safari User Reports
     sendMessage({
