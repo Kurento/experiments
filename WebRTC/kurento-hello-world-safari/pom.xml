@@ -29,17 +29,18 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
-		<!-- Development -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-devtools</artifactId>
-			<optional>true</optional>
-			<!-- Do "mvn compile" to trigger the automatic application restart -->
-		</dependency>
 		<dependency>
 			<groupId>org.springframework</groupId>
 			<artifactId>spring-websocket</artifactId>
 		</dependency>
+
+		<!-- Development -->
+		<!-- Do "mvn compile" to trigger the automatic application restart -->
+		<!-- <dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-devtools</artifactId>
+			<optional>true</optional>
+		</dependency> -->
 
 		<!-- WebJars -->
 		<dependency>
@@ -90,11 +91,12 @@
 					<mainClass>${start-class}</mainClass>
 
 					<!-- Development -->
-					<addResources>false</addResources>
+					<!-- <addResources>false</addResources>
 					<folders>
 						<folder>src/main/resources</folder>
-					</folders>
+					</folders> -->
 					<!-- <fork>true</fork> -->
+
 				</configuration>
 				<executions>
 					<execution>
