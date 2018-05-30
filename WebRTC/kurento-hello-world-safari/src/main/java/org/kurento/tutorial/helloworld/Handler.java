@@ -73,8 +73,26 @@ public class Handler extends TextWebSocketHandler
   @Autowired
   private KurentoClient kurento;
 
-  @Override
-  public void afterConnectionClosed(final WebSocketSession session,
+  /**
+	 * Invoked after WebSocket negotiation has succeeded and the WebSocket connection is
+	 * opened and ready for use.
+	 */
+	@Override
+  public void afterConnectionEstablished(WebSocketSession session)
+      throws Exception
+  {
+    log.info("[Handler::afterConnectionEstablished] New WebSocket connection, sessionId: {}",
+        session.getId());
+	}
+
+  /**
+	 * Invoked after the WebSocket connection has been closed by either side, or after a
+	 * transport error has occurred. Although the session may technically still be open,
+	 * depending on the underlying implementation, sending messages at this point is
+	 * discouraged and most likely will not succeed.
+	 */
+	@Override
+  public void afterConnectionClosed(WebSocketSession session,
       CloseStatus status) throws Exception
   {
     if (!status.equalsCode(CloseStatus.NORMAL)) {
@@ -85,7 +103,10 @@ public class Handler extends TextWebSocketHandler
     stop(session);
   }
 
-  @Override
+  /**
+	 * Invoked when a new WebSocket message arrives.
+	 */
+	@Override
   protected void handleTextMessage(WebSocketSession session,
       TextMessage message) throws Exception
   {
@@ -144,12 +165,17 @@ public class Handler extends TextWebSocketHandler
     }
   }
 
-  @Override
-  public void handleTransportError(WebSocketSession session, Throwable ex)
-      throws Exception
+  /**
+	 * Handle an error from the underlying WebSocket message transport.
+	 */
+	@Override
+  public void handleTransportError(WebSocketSession session,
+      Throwable exception) throws Exception
   {
     log.error("[Handler::handleTransportError] Exception: {}, sessionId: {}",
-        ex, session.getId());
+        exception, session.getId());
+
+    session.close(CloseStatus.SERVER_ERROR);
   }
 
   private synchronized void sendMessage(final WebSocketSession session,
