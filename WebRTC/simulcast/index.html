@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Disable favicon -->
+    <link rel="icon" href="data:," />
+
+    <title>WebRTC demo - PeerConnection with simulcast</title>
+  </head>
+
+  <body>
+    <h1>WebRTC demo - PeerConnection with simulcast</h1>
+
+    <div>
+      <button id="uiStartWebrtc">Start WebRTC</button>
+    </div>
+
+    <div>
+      <h2>Local video (from webcam)</h2>
+      <video
+        id="uiLocalVideo"
+        style="width: 320px;"
+        playsinline
+        autoplay
+        muted
+      ></video>
+    </div>
+
+    <div>
+      <h2>Remote video (from simulcast source)</h2>
+
+      <fieldset id="uiQualityInputs" disabled>
+        <legend>Quality:</legend>
+        <label>
+          <input type="radio" name="uiQuality" value="0" checked />Low
+        </label>
+        <label> <input type="radio" name="uiQuality" value="1" />Medium </label>
+        <label> <input type="radio" name="uiQuality" value="2" />High </label>
+      </fieldset>
+
+      <video
+        id="uiRemoteVideo"
+        style="width: 320px;"
+        playsinline
+        autoplay
+      ></video>
+    </div>
+
+    <script src="https://webrtchacks.github.io/adapter/adapter-latest.js"></script>
+    <script src="client.js"></script>
+  </body>
+</html>
