@@ -4,32 +4,26 @@
 // ======
 
 // 3 spatial simulcast layers, with a different SSRC and RID for each layer.
-const videoEncodings = [
+// RTCRtpEncodingParameters[]
+// https://w3c.github.io/webrtc-pc/#dom-rtcrtpencodingparameters
+const simulcastEncodings = [
   {
     rid: "r0",
-    maxBitrate: 3000000,
+    active: false,
+    maxBitrate: 2000000,
     scaleResolutionDownBy: 16.0,
-
-    // mediasoup-client/Chrome74.ts:send()
-    // https://w3c.github.io/webrtc-svc/#scalabilitymodes*
-    // https://w3c.github.io/webrtc-svc/#dependencydiagrams*
-    scalabilityMode: "L1T3",
   },
   {
     rid: "r1",
-    maxBitrate: 6000000,
+    active: false,
+    maxBitrate: 2000000,
     scaleResolutionDownBy: 8.0,
-
-    // mediasoup-client/Chrome74.ts:send()
-    scalabilityMode: "L1T3",
   },
   {
     rid: "r2",
-    maxBitrate: 9000000,
+    active: true,
+    maxBitrate: 2000000,
     scaleResolutionDownBy: 1.0,
-
-    // mediasoup-client/Chrome74.ts:send()
-    scalabilityMode: "L1T3",
   },
 ];
 
@@ -40,7 +34,7 @@ const global = {
   pcSend: null,
   pcRecv: null,
 
-  transceiverSendVideo: null,
+  tcSendVideo: null,
 };
 
 // HTML UI elements
@@ -63,20 +57,22 @@ for (const input of document.getElementsByName("uiQuality")) {
 }
 
 window.addEventListener("load", () => {
-  console.log("Page loaded");
+  console.log("[on window.load] Page loaded");
 
   if ("adapter" in window) {
     console.log(
       // eslint-disable-next-line no-undef
-      `webrtc-adapter loaded, browser: '${adapter.browserDetails.browser}', version: '${adapter.browserDetails.version}'`
+      `[on window.load] webrtc-adapter loaded, browser: '${adapter.browserDetails.browser}', version: '${adapter.browserDetails.version}'`
     );
   } else {
-    console.warn("webrtc-adapter is not loaded! an install or config issue?");
+    console.warn(
+      "[on window.load] webrtc-adapter is not loaded! an install or config issue?"
+    );
   }
 });
 
 window.addEventListener("beforeunload", () => {
-  console.log("Page unloading");
+  console.log("[on window.beforeunload] Page unloading");
 });
 
 // startWebrtc() implementation
@@ -110,10 +106,10 @@ function startWebrtcPc() {
       try {
         await pcRecv.addIceCandidate(iceEvent.candidate);
       } catch (err) {
-        console.error("[pcSend.icecandidate] Error:", err);
+        console.error("[on pcSend.icecandidate] Error:", err);
       }
     } else {
-      console.log("[pcSend.icecandidate] All ICE candidates have been sent");
+      console.log("[on pcSend.icecandidate] All ICE candidates have been sent");
     }
   });
 
@@ -123,10 +119,10 @@ function startWebrtcPc() {
       try {
         await pcSend.addIceCandidate(iceEvent.candidate);
       } catch (err) {
-        console.error("[pcRecv.icecandidate] Error:", err);
+        console.error("[on pcRecv.icecandidate] Error:", err);
       }
     } else {
-      console.log("[pcRecv.icecandidate] All ICE candidates have been sent");
+      console.log("[on pcRecv.icecandidate] All ICE candidates have been sent");
     }
   });
 }
@@ -136,7 +132,7 @@ function startWebrtcSdp() {
   const pcRecv = global.pcRecv;
 
   pcSend.addEventListener("negotiationneeded", async () => {
-    console.log("[pcSend.negotiationneeded]");
+    console.log("[on pcSend.negotiationneeded]");
 
     try {
       const sdpOffer = await pcSend.createOffer();
@@ -166,13 +162,13 @@ function startWebrtcSdp() {
       await pcSend.setRemoteDescription(pcRecv.localDescription);
       console.log("[pcRecv] SDP Answer:", pcRecv.localDescription.sdp);
     } catch (err) {
-      console.error("[pcSend.negotiationneeded] Error:", err);
+      console.error("[on pcSend.negotiationneeded] Error:", err);
     }
   });
 
   pcRecv.addEventListener("iceconnectionstatechange", () => {
     console.log(
-      "[pcRecv.iceconnectionstatechange] pcRecv.iceConnectionState:",
+      "[on pcRecv.iceconnectionstatechange] pcRecv.iceConnectionState:",
       pcRecv.iceConnectionState
     );
   });
@@ -184,8 +180,11 @@ async function startWebrtcMedia() {
 
   pcRecv.addEventListener("track", (trackEvent) => {
     console.log(
-      `[pcRecv.track] kind: ${trackEvent.track.kind}, direction: ${trackEvent.transceiver.direction}`
+      `[on pcRecv.track] kind: ${trackEvent.track.kind}, direction: ${trackEvent.transceiver.direction}`
     );
+
+    // Show the stream.
+    // This starts automatically because the <video> element is "autoplay".
     ui.remoteVideo.srcObject = trackEvent.streams[0];
   });
 
@@ -200,31 +199,31 @@ async function startWebrtcMedia() {
     return;
   }
 
-  // Start showing the local video.
-  // This works automatically because `ui.localVideo` is "autoplay".
+  // Show the stream.
+  // This starts automatically because the <video> element is "autoplay".
   ui.localVideo.srcObject = localStream;
 
   // Add the new tracks to the sender PeerConnection.
   for (const track of localStream.getTracks()) {
-    const transceiverInit = {
+    const tcInit = {
       direction: "sendonly",
       streams: [localStream],
     };
 
     // "sendEncodings" is only valid for video tracks.
     if (track.kind === "video") {
-      transceiverInit.sendEncodings = videoEncodings;
+      tcInit.sendEncodings = simulcastEncodings;
     }
 
     // NOTE: addTransceiver() triggers event "negotiationneeded".
-    const transceiver = pcSend.addTransceiver(track, transceiverInit);
+    const tc = pcSend.addTransceiver(track, tcInit);
 
-    if (track.kind === "video" && !global.transceiverSendVideo) {
-      global.transceiverSendVideo = transceiver;
+    if (track.kind === "video" && !global.tcSendVideo) {
+      global.tcSendVideo = tc;
     }
 
     console.log(
-      `[pcSend.addTransceiver] kind: ${track.kind}, direction: ${transceiver.direction}`
+      `[pcSend.addTransceiver] kind: ${track.kind}, direction: ${tc.direction}`
     );
   }
 }
@@ -239,16 +238,16 @@ async function onQualityChanged(value) {
     return;
   }
 
-  const transceiver = global.transceiverSendVideo;
-  if (!transceiver) {
-    console.error("[onQualityChanged] BUG: no video transceiver");
+  const tcSendVideo = global.tcSendVideo;
+  if (!tcSendVideo) {
+    console.error("[onQualityChanged] BUG: no video sending transceiver");
     return;
   }
 
-  console.log("[onQualityChanged] Simulcast layer:", quality);
+  console.log("[onQualityChanged] Simulcast encoding:", quality);
 
-  const parameters = transceiver.sender.getParameters();
-  parameters.encodings.forEach((encoding, index) => {
+  const senderParams = tcSendVideo.sender.getParameters();
+  senderParams.encodings.forEach((encoding, index) => {
     if (index === quality) {
       encoding.active = true;
     } else {
@@ -256,5 +255,5 @@ async function onQualityChanged(value) {
     }
   });
 
-  await transceiver.sender.setParameters(parameters);
+  await tcSendVideo.sender.setParameters(senderParams);
 }

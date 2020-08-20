@@ -23,20 +23,22 @@ const ui = {
 ui.startWebrtc.addEventListener("click", startWebrtc);
 
 window.addEventListener("load", () => {
-  console.log("Page loaded");
+  console.log("[on window.load] Page loaded");
 
   if ("adapter" in window) {
     console.log(
       // eslint-disable-next-line no-undef
-      `webrtc-adapter loaded, browser: '${adapter.browserDetails.browser}', version: '${adapter.browserDetails.version}'`
+      `[on window.load] webrtc-adapter loaded, browser: '${adapter.browserDetails.browser}', version: '${adapter.browserDetails.version}'`
     );
   } else {
-    console.warn("webrtc-adapter is not loaded! an install or config issue?");
+    console.warn(
+      "[on window.load] webrtc-adapter is not loaded! an install or config issue?"
+    );
   }
 });
 
 window.addEventListener("beforeunload", () => {
-  console.log("Page unloading");
+  console.log("[on window.beforeunload] Page unloading");
 });
 
 // startWebrtc() implementation
@@ -69,10 +71,10 @@ function startWebrtcPc() {
       try {
         await pcRecv.addIceCandidate(iceEvent.candidate);
       } catch (err) {
-        console.error("[pcSend.icecandidate] Error:", err);
+        console.error("[on pcSend.icecandidate] Error:", err);
       }
     } else {
-      console.log("[pcSend.icecandidate] All ICE candidates have been sent");
+      console.log("[on pcSend.icecandidate] All ICE candidates have been sent");
     }
   });
 
@@ -82,10 +84,10 @@ function startWebrtcPc() {
       try {
         await pcSend.addIceCandidate(iceEvent.candidate);
       } catch (err) {
-        console.error("[pcRecv.icecandidate] Error:", err);
+        console.error("[on pcRecv.icecandidate] Error:", err);
       }
     } else {
-      console.log("[pcRecv.icecandidate] All ICE candidates have been sent");
+      console.log("[on pcRecv.icecandidate] All ICE candidates have been sent");
     }
   });
 }
@@ -95,7 +97,7 @@ function startWebrtcSdp() {
   const pcRecv = global.pcRecv;
 
   pcSend.addEventListener("negotiationneeded", async () => {
-    console.log("[pcSend.negotiationneeded]");
+    console.log("[on pcSend.negotiationneeded]");
 
     try {
       const sdpOffer = await pcSend.createOffer();
@@ -108,13 +110,13 @@ function startWebrtcSdp() {
       await pcSend.setRemoteDescription(pcRecv.localDescription);
       console.log("[pcRecv] SDP Answer:", pcRecv.localDescription.sdp);
     } catch (err) {
-      console.error("[pcSend.negotiationneeded] Error:", err);
+      console.error("[on pcSend.negotiationneeded] Error:", err);
     }
   });
 
   pcRecv.addEventListener("iceconnectionstatechange", () => {
     console.log(
-      "[pcRecv.iceconnectionstatechange] pcRecv.iceConnectionState:",
+      "[on pcRecv.iceconnectionstatechange] pcRecv.iceConnectionState:",
       pcRecv.iceConnectionState
     );
   });
@@ -126,8 +128,11 @@ async function startWebrtcMedia() {
 
   pcRecv.addEventListener("track", (trackEvent) => {
     console.log(
-      `[pcRecv.track] kind: ${trackEvent.track.kind}, direction: ${trackEvent.transceiver.direction}`
+      `[on pcRecv.track] kind: ${trackEvent.track.kind}, direction: ${trackEvent.transceiver.direction}`
     );
+
+    // Show the stream.
+    // This starts automatically because the <video> element is "autoplay".
     ui.remoteVideo.srcObject = trackEvent.streams[0];
   });
 
@@ -142,22 +147,21 @@ async function startWebrtcMedia() {
     return;
   }
 
-  // Start showing the local video.
-  // This works automatically because `ui.localVideo` is "autoplay".
+  // Show the stream.
+  // This starts automatically because the <video> element is "autoplay".
   ui.localVideo.srcObject = localStream;
 
   // Add the new tracks to the sender PeerConnection.
   for (const track of localStream.getTracks()) {
-    // NOTE: `addTrack()` triggers event "negotiationneeded".
-    // NOTE: `addTrack()` causes creation of a "sendrecv" RTCRtpTransceiver.
-    // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/addTrack
+    // NOTE: addTrack() causes creation of a "sendrecv" RTCRtpTransceiver.
+    //       https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/addTrack#New_senders
+    // NOTE: addTrack() triggers event "negotiationneeded".
     const sender = pcSend.addTrack(track, localStream);
 
-    const transceiver = pcSend
-      .getTransceivers()
-      .find((t) => t.sender == sender);
+    // Log the new track and its corresponding transceiver's direction.
+    const tc = pcSend.getTransceivers().find((tc) => tc.sender == sender);
     console.log(
-      `[pcSend.addTrack] kind: ${track.kind}, direction: ${transceiver.direction}`
+      `[pcSend.addTrack] kind: ${track.kind}, direction: ${tc.direction}`
     );
   }
 }
