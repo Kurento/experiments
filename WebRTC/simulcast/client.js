@@ -206,22 +206,21 @@ async function startWebrtcMedia() {
 
   // Add the new tracks to the sender PeerConnection.
   for (const track of localStream.getTracks()) {
-    let transceiver;
-    if (track.kind === "video") {
-      transceiver = pcSend.addTransceiver(track, {
-        direction: "sendonly",
-        sendEncodings: videoEncodings,
-        streams: [localStream],
-      });
+    const transceiverInit = {
+      direction: "sendonly",
+      streams: [localStream],
+    };
 
-      if (!global.transceiverSendVideo) {
-        global.transceiverSendVideo = transceiver;
-      }
-    } else {
-      transceiver = pcSend.addTransceiver(track, {
-        direction: "sendonly",
-        streams: [localStream],
-      });
+    // "sendEncodings" is only valid for video tracks.
+    if (track.kind === "video") {
+      transceiverInit.sendEncodings = videoEncodings;
+    }
+
+    // NOTE: addTransceiver() triggers event "negotiationneeded".
+    const transceiver = pcSend.addTransceiver(track, transceiverInit);
+
+    if (track.kind === "video" && !global.transceiverSendVideo) {
+      global.transceiverSendVideo = transceiver;
     }
 
     console.log(
