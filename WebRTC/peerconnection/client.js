@@ -175,6 +175,12 @@ async function startWebrtcMedia() {
 }
 
 async function startWebrtcStats() {
+  const statsData = {
+    packetsLost: 0,
+    packetsSent: 0,
+    retransmittedPacketsSent: 0,
+  };
+
   // Program regular retrieval of stats.
   const intervalID = setInterval(async () => {
     const pcSend = global.pcSend;
@@ -258,6 +264,42 @@ async function startWebrtcStats() {
 
     // Use all obtained stats to print their values.
     console.log("[on interval] SEND VIDEO STATS:", data);
+
+    // Calculate a Mean Opinion Score (MOS)
+    // https://www.pingman.com/kb/article/how-is-mos-calculated-in-pingplotter-pro-50.html
+
+    const intervalPacketsLost =
+      rtpRemoteInVideo.packetsLost - statsData.packetsLost;
+    const intervalPacketsSent = rtpOutVideo.packetsSent - statsData.packetsSent;
+    const intervalRetPacketsSent =
+      rtpOutVideo.retransmittedPacketsSent - statsData.retransmittedPacketsSent;
+    {
+      statsData.packetsLost = rtpRemoteInVideo.packetsLost;
+      statsData.packetsSent = rtpOutVideo.packetsSent;
+      statsData.retransmittedPacketsSent = rtpOutVideo.retransmittedPacketsSent;
+    }
+
+    const PacketLossPct =
+      (100.0 * intervalPacketsLost) /
+      (intervalPacketsSent - intervalRetPacketsSent);
+    console.log("PacketLossPct:", PacketLossPct);
+
+    const AverageLatencyMs = 1000.0 * rtpRemoteInVideo.roundTripTime;
+    console.log("AverageLatencyMs:", AverageLatencyMs);
+
+    const JitterMs = 1000.0 * rtpRemoteInVideo.jitter;
+    console.log("JitterMs:", JitterMs);
+
+    const EffectiveLatency = AverageLatencyMs + JitterMs * 2.0 + 10.0;
+    let R;
+    if (EffectiveLatency < 160.0) {
+      R = 93.2 - EffectiveLatency / 40.0;
+    } else {
+      R = 93.2 - (EffectiveLatency - 120.0) / 10.0;
+    }
+    R = R - PacketLossPct * 2.5;
+    const MOS = 1 + 0.035 * R + 0.000007 * R * (R - 60) * (100 - R);
+    console.log("Mean Opinion Score:", MOS);
   }, 3000);
   global.statsInterval = intervalID;
 }
