@@ -7,6 +7,17 @@ const global = {
   pcSend: null,
   pcRecv: null,
   statsInterval: null,
+
+  // Memory used to calculate averages and rates.
+  printWebRtcStats: { bytesSent: 0 },
+  printPingPlotterMos: {
+    packetsLost: 0,
+    packetsSent: 0,
+    retransmittedPacketsSent: 0,
+  },
+  printJitsiQualityPct: {
+    bytesSent: 0,
+  },
 };
 
 // HTML UI elements
@@ -179,130 +190,361 @@ async function startWebrtcStats() {
     packetsLost: 0,
     packetsSent: 0,
     retransmittedPacketsSent: 0,
+    bytesSent: 0,
   };
 
-  // Program regular retrieval of stats.
+  // Retrieve stats once per second; this is needed to calculate values such as
+  // bitrates (bits per second) or interval losses (packets lost per second).
   const intervalID = setInterval(async () => {
-    const pcSend = global.pcSend;
-    const pcRecv = global.pcRecv;
+    const pc = global.pcSend;
 
-    // getStats() returns RTCStatsReport, which behaves like a Map.
-    // Each RTCStatsReport's value is an RTCStats-derived object, where "type"
-    // is one of the RTCStatsType enum.
-    //
-    // Spec:
-    // https://w3c.github.io/webrtc-pc/#dom-rtcstatsreport
-    // https://w3c.github.io/webrtc-pc/#dom-rtcstats
-    // https://w3c.github.io/webrtc-stats/#dom-rtcstatstype
-    const [reportSend, reportRecv] = await Promise.all([
-      pcSend.getStats(),
-      pcRecv.getStats(),
-    ]);
+    const statsReport = await pc.getStats();
 
-    // DEBUG
-    reportSend.forEach((stat) => console.log(JSON.stringify(stat)));
-
-    // Extract values to an Array, so map(), filter(), etc are available.
-    const statsSend = Array.from(reportSend.values());
-    const statsRecv = Array.from(reportRecv.values());
-
-    // Obtain all needed stats, finding them by their type.
-    const rtpOutVideos = statsSend.filter(
-      (s) => s.type === "outbound-rtp" && s.kind === "video"
-    );
-    const rtpRemoteInVideos = statsSend.filter(
-      (s) => s.type === "remote-inbound-rtp" && s.kind === "video"
-    );
-    const candidatePairs = statsSend.filter((s) => s.type === "candidate-pair");
-    const localCandidates = statsSend.filter(
-      (s) => s.type === "local-candidate"
-    );
-    const remoteCandidates = statsSend.filter(
-      (s) => s.type === "remote-candidate"
-    );
-    const codecs = statsSend.filter((s) => s.type === "codec");
-    const transports = statsSend.filter((s) => s.type === "transport");
-
-    // Filter and match stats, to find the wanted values.
-    // (report only from first video track that is found)
-    const rtpOutVideo = rtpOutVideos[0];
-    const rtpRemoteInVideo = rtpRemoteInVideos.find(
-      (r) => r.id === rtpOutVideo.remoteId
-    );
-    const codec = codecs.find((c) => c.id === rtpOutVideo.codecId);
-    const transport = transports.find((t) => t.id === rtpOutVideo.transportId);
-    const candidatePair = candidatePairs.find(
-      (p) => p.id === transport.selectedCandidatePairId
-    );
-    const localCandidate = localCandidates.find(
-      (c) => c.id === candidatePair.localCandidateId
-    );
-    const remoteCandidate = remoteCandidates.find(
-      (c) => c.id === candidatePair.remoteCandidateId
-    );
-
-    let data = {};
-    data.localSsrc = rtpOutVideo.ssrc;
-    data.remoteSsrc = rtpRemoteInVideo.ssrc;
-    data.codec = codec.mimeType;
-    data.localPort = localCandidate.port;
-    data.remotePort = remoteCandidate.port;
-    data.packetsSent = rtpOutVideo.packetsSent;
-    data.retransmittedPacketsSent = rtpOutVideo.retransmittedPacketsSent;
-    data.bytesSent = rtpOutVideo.bytesSent;
-    data.nackCount = rtpOutVideo.nackCount;
-    data.firCount = rtpOutVideo.firCount ? rtpOutVideo.firCount : 0;
-    data.pliCount = rtpOutVideo.pliCount ? rtpOutVideo.pliCount : 0;
-    data.sliCount = rtpOutVideo.sliCount ? rtpOutVideo.sliCount : 0;
-    data.iceRoundTripTime = candidatePair.currentRoundTripTime;
-    data.inBitrate = candidatePair.availableIncomingBitrate
-      ? candidatePair.availableIncomingBitrate
-      : 0;
-    data.outBitrate = candidatePair.availableOutgoingBitrate
-      ? candidatePair.availableOutgoingBitrate
-      : 0;
-
-    // Use all obtained stats to print their values.
-    console.log("[on interval] SEND VIDEO STATS:", data);
-
-    // Calculate a Mean Opinion Score (MOS)
-    // https://www.pingman.com/kb/article/how-is-mos-calculated-in-pingplotter-pro-50.html
-
-    const intervalPacketsLost =
-      rtpRemoteInVideo.packetsLost - statsData.packetsLost;
-    const intervalPacketsSent = rtpOutVideo.packetsSent - statsData.packetsSent;
-    const intervalRetPacketsSent =
-      rtpOutVideo.retransmittedPacketsSent - statsData.retransmittedPacketsSent;
-    {
-      statsData.packetsLost = rtpRemoteInVideo.packetsLost;
-      statsData.packetsSent = rtpOutVideo.packetsSent;
-      statsData.retransmittedPacketsSent = rtpOutVideo.retransmittedPacketsSent;
-    }
-
-    const PacketLossPct =
-      (100.0 * intervalPacketsLost) /
-      (intervalPacketsSent - intervalRetPacketsSent);
-    console.log("PacketLossPct:", PacketLossPct);
-
-    const AverageLatencyMs = 1000.0 * rtpRemoteInVideo.roundTripTime;
-    console.log("AverageLatencyMs:", AverageLatencyMs);
-
-    const JitterMs = 1000.0 * rtpRemoteInVideo.jitter;
-    console.log("JitterMs:", JitterMs);
-
-    const EffectiveLatency = AverageLatencyMs + JitterMs * 2.0 + 10.0;
-    let R;
-    if (EffectiveLatency < 160.0) {
-      R = 93.2 - EffectiveLatency / 40.0;
-    } else {
-      R = 93.2 - (EffectiveLatency - 120.0) / 10.0;
-    }
-    R = R - PacketLossPct * 2.5;
-    const MOS = 1 + 0.035 * R + 0.000007 * R * (R - 60) * (100 - R);
-    console.log("Mean Opinion Score:", MOS);
-  }, 3000);
+    // These functions are totally independent, so no code reuse between them.
+    printWebRtcStats(statsReport);
+    printPingPlotterMos(statsReport);
+    printJitsiQualityPct(statsReport);
+  }, 1000);
   global.statsInterval = intervalID;
 }
+
+/**
+ * Extracts specific stats arrays from an RTCStatsReport.
+ *
+ * @param {RTCStatsReport} statsReport A stats report obtained from
+ *   `RTCPeerConnection.getStats()`.
+ * @returns {Object} An object containing each stat type in an individual array.
+ */
+function getDestructuredStats(statsReport) {
+  /*
+  RTCStatsReport behaves like a Map. Each value is an RTCStats-derived
+  object, where "type" is one of the RTCStatsType enum.
+
+  Spec:
+  - RTCStatsReport: https://w3c.github.io/webrtc-pc/#dom-rtcstatsreport
+  - RTCStats: https://w3c.github.io/webrtc-pc/#dom-rtcstats
+  - RTCStatsType: https://w3c.github.io/webrtc-stats/#dom-rtcstatstype
+  */
+
+  const ret = {};
+
+  // DEBUG - Print all contents of the RTCStatsReport.
+  // statsReport.forEach((stat) => console.log(JSON.stringify(stat)));
+
+  // Extract values to an Array, so map(), filter(), etc are available.
+  const statsArray = Array.from(statsReport.values());
+
+  // Obtain an array for each type of stats.
+  ret.localVideos = statsArray.filter(
+    (s) => s.type === "outbound-rtp" && s.kind === "video"
+  );
+  ret.remoteVideos = statsArray.filter(
+    (s) => s.type === "remote-inbound-rtp" && s.kind === "video"
+  );
+  ret.candidatePairs = statsArray.filter((s) => s.type === "candidate-pair");
+  ret.localCandidates = statsArray.filter((s) => s.type === "local-candidate");
+  ret.remoteCandidates = statsArray.filter(
+    (s) => s.type === "remote-candidate"
+  );
+  ret.codecs = statsArray.filter((s) => s.type === "codec");
+  ret.transports = statsArray.filter((s) => s.type === "transport");
+
+  return ret;
+}
+
+function printWebRtcStats(videoStatsReport) {
+  const stats = getDestructuredStats(videoStatsReport);
+
+  // Filter and match stats, to find the wanted values
+  // (report only from first video track that is found)
+
+  // Note: in TypeScript, most of these would be using the '?' operator.
+
+  const localVideoStats = stats.localVideos[0];
+  const remoteVideoStats = stats.remoteVideos.find(
+    (r) => r.id === localVideoStats.remoteId
+  );
+  const codecStats = stats.codecs.find((c) => c.id === localVideoStats.codecId);
+  const transportStats = stats.transports.find(
+    (t) => t.id === localVideoStats.transportId
+  );
+  const candidatePairStats = stats.candidatePairs.find(
+    (p) => p.id === transportStats.selectedCandidatePairId
+  );
+  const localCandidateStats = stats.localCandidates.find(
+    (c) => c.id === candidatePairStats.localCandidateId
+  );
+  const remoteCandidateStats = stats.remoteCandidates.find(
+    (c) => c.id === candidatePairStats.remoteCandidateId
+  );
+
+  // Calculate per-second values.
+  const bytesSentPerS =
+    localVideoStats.bytesSent - global.printWebRtcStats.bytesSent;
+
+  // Update values in memory, for the next iteration.
+  global.printWebRtcStats.bytesSent = localVideoStats.bytesSent;
+
+  // Prepare data and print all values.
+  const bitrateSentKbps = (bytesSentPerS * 8) / 1000.0;
+  const availableInBitrateKbps = candidatePairStats.availableIncomingBitrate
+    ? candidatePairStats.availableIncomingBitrate / 1000.0
+    : 0;
+  const availableOutBitrateKbps = candidatePairStats.availableOutgoingBitrate
+    ? candidatePairStats.availableOutgoingBitrate / 1000.0
+    : 0;
+  let data = {};
+  data.localSsrc = localVideoStats.ssrc;
+  data.remoteSsrc = remoteVideoStats.ssrc;
+  data.codec = codecStats.mimeType;
+  data.localPort = localCandidateStats.port;
+  data.remotePort = remoteCandidateStats.port;
+  data.packetsSent = localVideoStats.packetsSent;
+  data.retransmittedPacketsSent = localVideoStats.retransmittedPacketsSent;
+  data.bytesSent = localVideoStats.bytesSent;
+  data.nackCount = localVideoStats.nackCount;
+  data.firCount = localVideoStats.firCount ? localVideoStats.firCount : 0;
+  data.pliCount = localVideoStats.pliCount ? localVideoStats.pliCount : 0;
+  data.sliCount = localVideoStats.sliCount ? localVideoStats.sliCount : 0;
+  data.iceRoundTripTime = candidatePairStats.currentRoundTripTime;
+  data.bitrateSentKbps = bitrateSentKbps;
+  data.availableInBitrateKbps = availableInBitrateKbps;
+  data.availableOutBitrateKbps = availableOutBitrateKbps;
+
+  console.log("[printWebRtcStats] VIDEO STATS:", data);
+}
+
+/* ==== printPingPlotterMos -- BEGIN ==== */
+
+function printPingPlotterMos(videoStatsReport) {
+  const stats = getDestructuredStats(videoStatsReport);
+
+  // Filter and match stats, to find the wanted values
+  // (report only from first video track that is found)
+
+  const localVideoStats = stats.localVideos[0];
+  const remoteVideoStats = stats.remoteVideos.find(
+    (r) => r.id === localVideoStats.remoteId
+  );
+
+  // Calculate per-second values.
+  const packetsLostPerS =
+    remoteVideoStats.packetsLost - global.printPingPlotterMos.packetsLost;
+  const packetsSentPerS =
+    localVideoStats.packetsSent - global.printPingPlotterMos.packetsSent;
+  const packetsResentPerS =
+    localVideoStats.retransmittedPacketsSent -
+    global.printPingPlotterMos.retransmittedPacketsSent;
+
+  // Update values in memory, for the next iteration.
+  global.printPingPlotterMos.packetsLost = remoteVideoStats.packetsLost;
+  global.printPingPlotterMos.packetsSent = localVideoStats.packetsSent;
+  global.printPingPlotterMos.retransmittedPacketsSent =
+    localVideoStats.retransmittedPacketsSent;
+
+  // Prepare arguments and call the calculate function.
+  const latencyMs = (1000.0 * remoteVideoStats.roundTripTime) / 2.0;
+  const jitterMs = 1000.0 * remoteVideoStats.jitter;
+  const packetLossPct =
+    (100.0 * packetsLostPerS) / (packetsSentPerS - packetsResentPerS);
+
+  const pingPlotterMos = calculatePingPlotterMos(
+    latencyMs,
+    jitterMs,
+    packetLossPct
+  );
+  console.log("PingPlotter MOS (stars [1 - 4.4]):", pingPlotterMos);
+}
+
+// Calculate a Mean Opinion Score (MOS)
+// https://www.pingman.com/kb/article/how-is-mos-calculated-in-pingplotter-pro-50.html
+function calculatePingPlotterMos(latencyMs, jitterMs, packetLossPct) {
+  const EffectiveLatency = latencyMs + jitterMs * 2.0 + 10.0;
+  let R;
+  if (EffectiveLatency < 160.0) {
+    R = 93.2 - EffectiveLatency / 40.0;
+  } else {
+    R = 93.2 - (EffectiveLatency - 120.0) / 10.0;
+  }
+  R = R - packetLossPct * 2.5;
+  const MOS = 1 + 0.035 * R + 0.000007 * R * (R - 60) * (100 - R);
+  return MOS;
+}
+
+/* ==== printPingPlotterMos -- END ==== */
+
+/* ==== printJitsiQualityPct -- BEGIN ==== */
+
+function printJitsiQualityPct(videoStatsReport) {
+  const stats = getDestructuredStats(videoStatsReport);
+
+  // Filter and match stats, to find the wanted values
+  // (report only from first video track that is found)
+
+  const localVideoStats = stats.localVideos[0];
+
+  // Calculate per-second values.
+  const bytesSentPerS =
+    localVideoStats.bytesSent - global.printJitsiQualityPct.bytesSent;
+
+  // Update values in memory, for the next iteration.
+  global.printJitsiQualityPct.bytesSent = localVideoStats.bytesSent;
+
+  // Prepare arguments and call the calculate function.
+  const width = localVideoStats.frameWidth;
+  const height = localVideoStats.frameHeight;
+  const bitrateSentKbps = (bytesSentPerS * 8) / 1000.0;
+
+  // About bitrateCapKbps:
+  // Possible sources of maximum bitrate caps are:
+  // - SDP m-section with the attribute `b=AS`.
+  // - RtpParameters max bitrate set with
+  //   `RTCRtpSender.setParameters({ encodings: [{ maxBitrate }] })`.
+  // Here, we use `null` because in this example there is no cap set.
+  const bitrateCapKbps = null;
+
+  const jitsiQualityPct = calculateJitsiQualityPct(
+    width,
+    height,
+    bitrateSentKbps,
+    bitrateCapKbps
+  );
+  console.log("Jitsi Quality Percent:", jitsiQualityPct);
+}
+
+/**
+ * This function is translated from the same one in WebRTC source code:
+ * https://source.chromium.org/chromium/chromium/src/+/master:third_party/webrtc/media/engine/webrtc_video_engine.cc;l=266-282;drc=ceb44959cae281f8a77174acc96676efc9ae6db1
+ *
+ * PROBLEMS:
+ * Other
+ */
+function GetMaxDefaultVideoBitrateKbps(width, height, is_screenshare) {
+  let max_bitrate;
+  if (width * height <= 320 * 240) {
+    max_bitrate = 600;
+  } else if (width * height <= 640 * 480) {
+    max_bitrate = 1700;
+  } else if (width * height <= 960 * 540) {
+    max_bitrate = 2000;
+  } else {
+    max_bitrate = 2500;
+  }
+  if (is_screenshare) max_bitrate = Math.max(max_bitrate, 1200);
+  return max_bitrate;
+}
+
+/**
+ * The maximum bitrate to use as reference against the current bitrate.
+ *
+ * This cap helps in the cases where the participant's bitrate is high
+ * but not enough to fulfill high targets, such as with 1080p.
+ *
+ * @const {number}
+ */
+const MAX_TARGET_BITRATE_KBPS = 2500;
+
+/**
+ * Calculates a "connection quality" percentage value.
+ *
+ * @param {number} width Current width of the output video, in pixels.
+ * @param {number} height Current height of the output video, in pixels.
+ * @param {number} bitrateSentKbps Current output bitrate, in Kbps.
+ * @param {?number} bitrateCapKbps Any maximum bitrate cap that might be
+ *   configured on the output track, in Kbps.
+ * @returns {number} Quality percentage measurement, from 0% to 100%.
+ *
+ * About width, height:
+ * The output video resolution can be found in the  stats types:
+ * - "track"
+ * - "media-source"
+ * - "outbound-rtp"
+ * Otherwise, it also can be read directly from MediaStreamTrack.getSettings():
+ * - https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamTrack/getSettings
+ * - https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackSettings/height
+ *
+ * About bitrateCapKbps:
+ * Possible sources of maximum bitrate caps are:
+ * - SDP m-section with the attribute `b=AS`.
+ * - RtpParameters max bitrate set with
+ *   `RTCRtpSender.setParameters({ encodings: [{ maxBitrate }] })`.
+ *
+ * Based on the function `_calculateConnectionQuality()` in Jitsi Meet:
+ * https://github.com/jitsi/lib-jitsi-meet/blob/412606485511afc9a2495f6fb58aa76f65d509a9/modules/connectivity/ConnectionQuality.js#L322
+ */
+function calculateJitsiQualityPct(
+  width,
+  height,
+  bitrateSentKbps,
+  bitrateCapKbps
+) {
+  // Target sending bitrate in perfect conditions.
+  let targetKbps = GetMaxDefaultVideoBitrateKbps(width, height, false);
+  targetKbps = Math.min(0.9 * targetKbps, MAX_TARGET_BITRATE_KBPS);
+  if (bitrateCapKbps) {
+    targetKbps = Math.min(targetKbps, bitrateCapKbps);
+  }
+
+  // "Quality" is the ratio between actual bitrate and target bitrate.
+  const qualityPct = (100.0 * bitrateSentKbps) / targetKbps;
+
+  return qualityPct;
+}
+
+/* ==== printJitsiQualityPct -- END ==== */
+
+/* ==== Ideas that can be used in the UI -- BEGIN ==== */
+
+/**
+ * The connection quality percentage that must be reached to be considered of
+ * good quality and can result in the quality display being hidden.
+ *
+ * @const {number}
+ */
+const UI_QUALITY_DISPLAY_THRESHOLD = 30;
+
+/**
+ * An array of display configurations for the quality indicator and its bars.
+ *
+ * @const
+ *
+ * Jisti compares the quality percent to the { percent } fields of this array,
+ * and chooses the first object that satisfies the threshold.
+ *
+ * Other UI tips shown in the Jitsi quality indicator are:
+ * - "Inactive" when the connection hasn't been started yet.
+ * - "Lost" when the connection is interrupted because packets suddenly
+ *    stopped flowing.
+ */
+const UI_QUALITY_TO_WIDTH = [
+  // Full (3 bars)
+  {
+    colorClass: "status-high",
+    percent: UI_QUALITY_DISPLAY_THRESHOLD,
+    tip: "Good",
+    width: "100%",
+  },
+
+  // 2 bars
+  {
+    colorClass: "status-med",
+    percent: 10,
+    tip: "Non Optimal",
+    width: "66%",
+  },
+
+  // 1 bar
+  {
+    colorClass: "status-low",
+    percent: 0,
+    tip: "Poor",
+    width: "33%",
+  },
+
+  // Note: we never show 0 bars as long as there is a connection.
+];
+
+/* ==== Ideas that can be used in the UI -- END ==== */
 
 // STOP implementation
 // ===================
