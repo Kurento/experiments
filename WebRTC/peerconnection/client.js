@@ -215,58 +215,81 @@ async function startWebrtcStats() {
  *   `RTCPeerConnection.getStats()`.
  * @returns {Object} An object containing each stat type in an individual array.
  */
-function getDestructuredStats(statsReport) {
-  /*
-  RTCStatsReport behaves like a Map. Each value is an RTCStats-derived
-  object, where "type" is one of the RTCStatsType enum.
-
-  Spec:
-  - RTCStatsReport: https://w3c.github.io/webrtc-pc/#dom-rtcstatsreport
-  - RTCStats: https://w3c.github.io/webrtc-pc/#dom-rtcstats
-  - RTCStatsType: https://w3c.github.io/webrtc-stats/#dom-rtcstatstype
-  */
-
-  const ret = {};
-
+function getStatsArrays(statsReport) {
   // DEBUG - Print all contents of the RTCStatsReport.
   // statsReport.forEach((stat) => console.log(JSON.stringify(stat)));
 
-  // Extract values to an Array, so map(), filter(), etc are available.
-  const statsArray = Array.from(statsReport.values());
+  // RTCStatsReport behaves like a Map. Each value is an RTCStats-derived
+  // object, where "type" is one of the RTCStatsType enum.
+  //
+  // Spec:
+  // - RTCStatsReport: https://w3c.github.io/webrtc-pc/#dom-rtcstatsreport
+  // - RTCStats: https://w3c.github.io/webrtc-pc/#dom-rtcstats
+  // - RTCStatsType: https://w3c.github.io/webrtc-stats/#dom-rtcstatstype
 
-  // Obtain an array for each type of stats.
-  ret.localVideos = statsArray.filter(
-    (s) => s.type === "outbound-rtp" && s.kind === "video"
-  );
-  ret.remoteVideos = statsArray.filter(
-    (s) => s.type === "remote-inbound-rtp" && s.kind === "video"
-  );
-  ret.candidatePairs = statsArray.filter((s) => s.type === "candidate-pair");
-  ret.localCandidates = statsArray.filter((s) => s.type === "local-candidate");
-  ret.remoteCandidates = statsArray.filter(
-    (s) => s.type === "remote-candidate"
-  );
-  ret.codecs = statsArray.filter((s) => s.type === "codec");
-  ret.transports = statsArray.filter((s) => s.type === "transport");
+  const ret = {
+    candidatePairs: [],
+    codecs: [],
+    localCandidates: [],
+    localOutVideos: [],
+    remoteCandidates: [],
+    remoteInVideos: [],
+    transports: [],
+  };
+
+  // Build an array for each type of stats.
+  statsReport.forEach((stat) => {
+    switch (stat.type) {
+      case "candidate-pair":
+        ret.candidatePairs.push(stat);
+        break;
+      case "codec":
+        ret.codecs.push(stat);
+        break;
+      case "local-candidate":
+        ret.localCandidates.push(stat);
+        break;
+      case "outbound-rtp":
+        if (stat.kind === "video") {
+          ret.localOutVideos.push(stat);
+        }
+        break;
+      case "remote-candidate":
+        ret.remoteCandidates.push(stat);
+        break;
+      case "remote-inbound-rtp":
+        if (stat.kind === "video") {
+          ret.remoteInVideos.push(stat);
+        }
+        break;
+      case "transport":
+        ret.transports.push(stat);
+        break;
+      default:
+        break;
+    }
+  });
 
   return ret;
 }
 
 function printWebRtcStats(videoStatsReport) {
-  const stats = getDestructuredStats(videoStatsReport);
+  const stats = getStatsArrays(videoStatsReport);
 
   // Filter and match stats, to find the wanted values
   // (report only from first video track that is found)
 
   // Note: in TypeScript, most of these would be using the '?' operator.
 
-  const localVideoStats = stats.localVideos[0];
-  const remoteVideoStats = stats.remoteVideos.find(
-    (r) => r.id === localVideoStats.remoteId
+  const localOutVideoStats = stats.localOutVideos[0];
+  const remoteInVideoStats = stats.remoteInVideos.find(
+    (r) => r.id === localOutVideoStats.remoteId
   );
-  const codecStats = stats.codecs.find((c) => c.id === localVideoStats.codecId);
+  const codecStats = stats.codecs.find(
+    (c) => c.id === localOutVideoStats.codecId
+  );
   const transportStats = stats.transports.find(
-    (t) => t.id === localVideoStats.transportId
+    (t) => t.id === localOutVideoStats.transportId
   );
   const candidatePairStats = stats.candidatePairs.find(
     (p) => p.id === transportStats.selectedCandidatePairId
@@ -280,10 +303,10 @@ function printWebRtcStats(videoStatsReport) {
 
   // Calculate per-second values.
   const bytesSentPerS =
-    localVideoStats.bytesSent - global.printWebRtcStats.bytesSent;
+    localOutVideoStats.bytesSent - global.printWebRtcStats.bytesSent;
 
   // Update values in memory, for the next iteration.
-  global.printWebRtcStats.bytesSent = localVideoStats.bytesSent;
+  global.printWebRtcStats.bytesSent = localOutVideoStats.bytesSent;
 
   // Prepare data and print all values.
   const bitrateSentKbps = (bytesSentPerS * 8) / 1000.0;
@@ -294,18 +317,18 @@ function printWebRtcStats(videoStatsReport) {
     ? candidatePairStats.availableOutgoingBitrate / 1000.0
     : 0;
   let data = {};
-  data.localSsrc = localVideoStats.ssrc;
-  data.remoteSsrc = remoteVideoStats.ssrc;
+  data.localSsrc = localOutVideoStats.ssrc;
+  data.remoteSsrc = remoteInVideoStats.ssrc;
   data.codec = codecStats.mimeType;
   data.localPort = localCandidateStats.port;
   data.remotePort = remoteCandidateStats.port;
-  data.packetsSent = localVideoStats.packetsSent;
-  data.retransmittedPacketsSent = localVideoStats.retransmittedPacketsSent;
-  data.bytesSent = localVideoStats.bytesSent;
-  data.nackCount = localVideoStats.nackCount;
-  data.firCount = localVideoStats.firCount ? localVideoStats.firCount : 0;
-  data.pliCount = localVideoStats.pliCount ? localVideoStats.pliCount : 0;
-  data.sliCount = localVideoStats.sliCount ? localVideoStats.sliCount : 0;
+  data.packetsSent = localOutVideoStats.packetsSent;
+  data.retransmittedPacketsSent = localOutVideoStats.retransmittedPacketsSent;
+  data.bytesSent = localOutVideoStats.bytesSent;
+  data.nackCount = localOutVideoStats.nackCount;
+  data.firCount = localOutVideoStats.firCount ? localOutVideoStats.firCount : 0;
+  data.pliCount = localOutVideoStats.pliCount ? localOutVideoStats.pliCount : 0;
+  data.sliCount = localOutVideoStats.sliCount ? localOutVideoStats.sliCount : 0;
   data.iceRoundTripTime = candidatePairStats.currentRoundTripTime;
   data.bitrateSentKbps = bitrateSentKbps;
   data.availableInBitrateKbps = availableInBitrateKbps;
@@ -317,34 +340,34 @@ function printWebRtcStats(videoStatsReport) {
 /* ==== printPingPlotterMos -- BEGIN ==== */
 
 function printPingPlotterMos(videoStatsReport) {
-  const stats = getDestructuredStats(videoStatsReport);
+  const stats = getStatsArrays(videoStatsReport);
 
   // Filter and match stats, to find the wanted values
   // (report only from first video track that is found)
 
-  const localVideoStats = stats.localVideos[0];
-  const remoteVideoStats = stats.remoteVideos.find(
-    (r) => r.id === localVideoStats.remoteId
+  const localOutVideoStats = stats.localOutVideos[0];
+  const remoteInVideoStats = stats.remoteInVideos.find(
+    (r) => r.id === localOutVideoStats.remoteId
   );
 
   // Calculate per-second values.
   const packetsLostPerS =
-    remoteVideoStats.packetsLost - global.printPingPlotterMos.packetsLost;
+    remoteInVideoStats.packetsLost - global.printPingPlotterMos.packetsLost;
   const packetsSentPerS =
-    localVideoStats.packetsSent - global.printPingPlotterMos.packetsSent;
+    localOutVideoStats.packetsSent - global.printPingPlotterMos.packetsSent;
   const packetsResentPerS =
-    localVideoStats.retransmittedPacketsSent -
+    localOutVideoStats.retransmittedPacketsSent -
     global.printPingPlotterMos.retransmittedPacketsSent;
 
   // Update values in memory, for the next iteration.
-  global.printPingPlotterMos.packetsLost = remoteVideoStats.packetsLost;
-  global.printPingPlotterMos.packetsSent = localVideoStats.packetsSent;
+  global.printPingPlotterMos.packetsLost = remoteInVideoStats.packetsLost;
+  global.printPingPlotterMos.packetsSent = localOutVideoStats.packetsSent;
   global.printPingPlotterMos.retransmittedPacketsSent =
-    localVideoStats.retransmittedPacketsSent;
+    localOutVideoStats.retransmittedPacketsSent;
 
   // Prepare arguments and call the calculate function.
-  const latencyMs = (1000.0 * remoteVideoStats.roundTripTime) / 2.0;
-  const jitterMs = 1000.0 * remoteVideoStats.jitter;
+  const latencyMs = (1000.0 * remoteInVideoStats.roundTripTime) / 2.0;
+  const jitterMs = 1000.0 * remoteInVideoStats.jitter;
   const packetLossPct =
     (100.0 * packetsLostPerS) / (packetsSentPerS - packetsResentPerS);
 
@@ -376,23 +399,23 @@ function calculatePingPlotterMos(latencyMs, jitterMs, packetLossPct) {
 /* ==== printJitsiQualityPct -- BEGIN ==== */
 
 function printJitsiQualityPct(videoStatsReport) {
-  const stats = getDestructuredStats(videoStatsReport);
+  const stats = getStatsArrays(videoStatsReport);
 
   // Filter and match stats, to find the wanted values
   // (report only from first video track that is found)
 
-  const localVideoStats = stats.localVideos[0];
+  const localOutVideoStats = stats.localOutVideos[0];
 
   // Calculate per-second values.
   const bytesSentPerS =
-    localVideoStats.bytesSent - global.printJitsiQualityPct.bytesSent;
+    localOutVideoStats.bytesSent - global.printJitsiQualityPct.bytesSent;
 
   // Update values in memory, for the next iteration.
-  global.printJitsiQualityPct.bytesSent = localVideoStats.bytesSent;
+  global.printJitsiQualityPct.bytesSent = localOutVideoStats.bytesSent;
 
   // Prepare arguments and call the calculate function.
-  const width = localVideoStats.frameWidth;
-  const height = localVideoStats.frameHeight;
+  const width = localOutVideoStats.frameWidth;
+  const height = localOutVideoStats.frameHeight;
   const bitrateSentKbps = (bytesSentPerS * 8) / 1000.0;
 
   // About bitrateCapKbps:
@@ -409,7 +432,7 @@ function printJitsiQualityPct(videoStatsReport) {
     bitrateSentKbps,
     bitrateCapKbps
   );
-  console.log("Jitsi Quality Percent:", jitsiQualityPct);
+  console.log("Jitsi Quality Percent ([0 - 100%]):", jitsiQualityPct);
 }
 
 /**
@@ -480,7 +503,7 @@ function calculateJitsiQualityPct(
 ) {
   // Target sending bitrate in perfect conditions.
   let targetKbps = GetMaxDefaultVideoBitrateKbps(width, height, false);
-  targetKbps = Math.min(0.9 * targetKbps, MAX_TARGET_BITRATE_KBPS);
+  targetKbps = Math.min(targetKbps, MAX_TARGET_BITRATE_KBPS);
   if (bitrateCapKbps) {
     targetKbps = Math.min(targetKbps, bitrateCapKbps);
   }
