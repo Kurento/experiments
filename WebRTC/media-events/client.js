@@ -20,6 +20,9 @@ const ui = {
   // Video
   localVideo: document.getElementById("uiLocalVideo"),
   remoteVideo: document.getElementById("uiRemoteVideo"),
+
+  // Debug
+  console: document.getElementById("uiConsole"),
 };
 
 ui.start.addEventListener("click", startWebrtc);
@@ -44,6 +47,21 @@ window.addEventListener("load", () => {
 window.addEventListener("beforeunload", () => {
   console.log("[on window.beforeunload] Page unloading");
 });
+
+// Send all logs to both console and UI.
+{
+  const logMethod = console.log;
+  const logMessages = [];
+
+  console.log = function () {
+    logMessages.push.apply(logMessages, arguments);
+    ui.console.innerHTML = logMessages.reduce(
+      (acc, cur) => acc + cur + "<br>",
+      ""
+    );
+    logMethod.apply(console, arguments);
+  };
+}
 
 // START implementation
 // ====================
