@@ -6,7 +6,6 @@
 const global = {
   pcSend: null,
   pcRecv: null,
-  statsInterval: null,
 };
 
 // HTML UI elements
@@ -180,10 +179,10 @@ function startWebrtcPc() {
     }
   }
 
-  pcSend.addEventListener("icecandidate", async (iceEvent) =>
+  pcSend.addEventListener("icecandidate", (iceEvent) =>
     onIceCandidate(iceEvent, pcRecv)
   );
-  pcRecv.addEventListener("icecandidate", async (iceEvent) =>
+  pcRecv.addEventListener("icecandidate", (iceEvent) =>
     onIceCandidate(iceEvent, pcSend)
   );
 }
@@ -288,7 +287,6 @@ function stopWebrtc() {
   ui.remoteVideo.pause();
   ui.remoteVideo.srcObject = null;
 
-  clearInterval(global.statsInterval);
   global.pcSend.close();
   global.pcSend = null;
   global.pcRecv.close();
