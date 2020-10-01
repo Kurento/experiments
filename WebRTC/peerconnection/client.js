@@ -126,12 +126,12 @@ function startWebrtcSdp() {
       const sdpOffer = await pcSend.createOffer();
       await pcSend.setLocalDescription(sdpOffer);
       await pcRecv.setRemoteDescription(pcSend.localDescription);
-      console.log("[pcSend] SDP Offer:", pcSend.localDescription.sdp);
+      // console.log("[pcSend] SDP Offer:", pcSend.localDescription.sdp);
 
       const sdpAnswer = await pcRecv.createAnswer();
       await pcRecv.setLocalDescription(sdpAnswer);
       await pcSend.setRemoteDescription(pcRecv.localDescription);
-      console.log("[pcRecv] SDP Answer:", pcRecv.localDescription.sdp);
+      // console.log("[pcRecv] SDP Answer:", pcRecv.localDescription.sdp);
     } catch (err) {
       console.error("[on pcSend.negotiationneeded] Error:", err);
     }
@@ -211,7 +211,16 @@ async function startWebrtcStats() {
     // DEBUG - Print all contents of the RTCStatsReport.
     // statsMap.forEach((stats) => console.log(JSON.stringify(stats)));
 
-    printWebRtcStats(statsMap);
+    // printWebRtcStats(statsMap);
+
+    // Print all stats that contain "frameWidth"
+    statsMap.forEach((stats) => {
+      if ("frameWidth" in stats) {
+        console.log(
+          `stats type: ${stats.type}, frameWidth: ${stats.frameWidth}`
+        );
+      }
+    });
   }, 1000);
   global.statsInterval = intervalID;
 }
