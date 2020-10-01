@@ -186,119 +186,49 @@ async function startWebrtcMedia() {
 }
 
 async function startWebrtcStats() {
-  const statsData = {
-    packetsLost: 0,
-    packetsSent: 0,
-    retransmittedPacketsSent: 0,
-    bytesSent: 0,
-  };
-
   // Retrieve stats once per second; this is needed to calculate values such as
   // bitrates (bits per second) or interval losses (packets lost per second).
   const intervalID = setInterval(async () => {
     const pc = global.pcSend;
 
-    const statsReport = await pc.getStats();
+    // RTCStatsReport behaves like a Map. Each value is an RTCStats-derived
+    // object, where "type" is one of the RTCStatsType enum.
+    //
+    // Doc:
+    // - RTCStatsReport: https://w3c.github.io/webrtc-pc/#dom-rtcstatsreport
+    // - RTCStats: https://w3c.github.io/webrtc-pc/#dom-rtcstats
+    // - RTCStatsType: https://w3c.github.io/webrtc-stats/#dom-rtcstatstype
+    const statsMap = await pc.getStats();
+
+    // DEBUG - Print all contents of the RTCStatsReport.
+    // statsMap.forEach((stats) => console.log(JSON.stringify(stats)));
 
     // These functions are totally independent, so no code reuse between them.
-    printWebRtcStats(statsReport);
-    printPingPlotterMos(statsReport);
-    printJitsiQualityPct(statsReport);
+    printWebRtcStats(statsMap);
+    printPingPlotterMos(statsMap);
+    printJitsiQualityPct(statsMap);
   }, 1000);
   global.statsInterval = intervalID;
 }
 
-/**
- * Extracts specific stats arrays from an RTCStatsReport.
- *
- * @param {RTCStatsReport} statsReport A stats report obtained from
- *   `RTCPeerConnection.getStats()`.
- * @returns {Object} An object containing each stat type in an individual array.
- */
-function getStatsArrays(statsReport) {
-  // DEBUG - Print all contents of the RTCStatsReport.
-  // statsReport.forEach((stat) => console.log(JSON.stringify(stat)));
-
-  // RTCStatsReport behaves like a Map. Each value is an RTCStats-derived
-  // object, where "type" is one of the RTCStatsType enum.
-  //
-  // Spec:
-  // - RTCStatsReport: https://w3c.github.io/webrtc-pc/#dom-rtcstatsreport
-  // - RTCStats: https://w3c.github.io/webrtc-pc/#dom-rtcstats
-  // - RTCStatsType: https://w3c.github.io/webrtc-stats/#dom-rtcstatstype
-
-  const ret = {
-    candidatePairs: [],
-    codecs: [],
-    localCandidates: [],
-    localOutVideos: [],
-    remoteCandidates: [],
-    remoteInVideos: [],
-    transports: [],
-  };
-
-  // Build an array for each type of stats.
-  statsReport.forEach((stat) => {
-    switch (stat.type) {
-      case "candidate-pair":
-        ret.candidatePairs.push(stat);
-        break;
-      case "codec":
-        ret.codecs.push(stat);
-        break;
-      case "local-candidate":
-        ret.localCandidates.push(stat);
-        break;
-      case "outbound-rtp":
-        if (stat.kind === "video") {
-          ret.localOutVideos.push(stat);
-        }
-        break;
-      case "remote-candidate":
-        ret.remoteCandidates.push(stat);
-        break;
-      case "remote-inbound-rtp":
-        if (stat.kind === "video") {
-          ret.remoteInVideos.push(stat);
-        }
-        break;
-      case "transport":
-        ret.transports.push(stat);
-        break;
-      default:
-        break;
-    }
-  });
-
-  return ret;
-}
-
-function printWebRtcStats(videoStatsReport) {
-  const stats = getStatsArrays(videoStatsReport);
-
+function printWebRtcStats(statsMap) {
   // Filter and match stats, to find the wanted values
   // (report only from first video track that is found)
 
   // Note: in TypeScript, most of these would be using the '?' operator.
 
-  const localOutVideoStats = stats.localOutVideos[0];
-  const remoteInVideoStats = stats.remoteInVideos.find(
-    (r) => r.id === localOutVideoStats.remoteId
+  const localOutVideoStats = Array.from(statsMap.values()).find(
+    (stats) => stats.type === "outbound-rtp" && stats.kind === "video"
   );
-  const codecStats = stats.codecs.find(
-    (c) => c.id === localOutVideoStats.codecId
+  const remoteInVideoStats = statsMap.get(localOutVideoStats.remoteId);
+  const codecStats = statsMap.get(localOutVideoStats.codecId);
+  const transportStats = statsMap.get(localOutVideoStats.transportId);
+  const candidatePairStats = statsMap.get(
+    transportStats.selectedCandidatePairId
   );
-  const transportStats = stats.transports.find(
-    (t) => t.id === localOutVideoStats.transportId
-  );
-  const candidatePairStats = stats.candidatePairs.find(
-    (p) => p.id === transportStats.selectedCandidatePairId
-  );
-  const localCandidateStats = stats.localCandidates.find(
-    (c) => c.id === candidatePairStats.localCandidateId
-  );
-  const remoteCandidateStats = stats.remoteCandidates.find(
-    (c) => c.id === candidatePairStats.remoteCandidateId
+  const localCandidateStats = statsMap.get(candidatePairStats.localCandidateId);
+  const remoteCandidateStats = statsMap.get(
+    candidatePairStats.remoteCandidateId
   );
 
   // Calculate per-second values.
@@ -339,16 +269,14 @@ function printWebRtcStats(videoStatsReport) {
 
 /* ==== printPingPlotterMos -- BEGIN ==== */
 
-function printPingPlotterMos(videoStatsReport) {
-  const stats = getStatsArrays(videoStatsReport);
-
+function printPingPlotterMos(statsMap) {
   // Filter and match stats, to find the wanted values
   // (report only from first video track that is found)
 
-  const localOutVideoStats = stats.localOutVideos[0];
-  const remoteInVideoStats = stats.remoteInVideos.find(
-    (r) => r.id === localOutVideoStats.remoteId
+  const localOutVideoStats = Array.from(statsMap.values()).find(
+    (stats) => stats.type === "outbound-rtp" && stats.kind === "video"
   );
+  const remoteInVideoStats = statsMap.get(localOutVideoStats.remoteId);
 
   // Calculate per-second values.
   const packetsLostPerS =
@@ -398,13 +326,13 @@ function calculatePingPlotterMos(latencyMs, jitterMs, packetLossPct) {
 
 /* ==== printJitsiQualityPct -- BEGIN ==== */
 
-function printJitsiQualityPct(videoStatsReport) {
-  const stats = getStatsArrays(videoStatsReport);
-
+function printJitsiQualityPct(statsMap) {
   // Filter and match stats, to find the wanted values
   // (report only from first video track that is found)
 
-  const localOutVideoStats = stats.localOutVideos[0];
+  const localOutVideoStats = Array.from(statsMap.values()).find(
+    (stats) => stats.type === "outbound-rtp" && stats.kind === "video"
+  );
 
   // Calculate per-second values.
   const bytesSentPerS =
