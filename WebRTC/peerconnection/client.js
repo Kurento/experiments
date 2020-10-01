@@ -130,6 +130,7 @@ function startWebrtcSdp() {
       console.log("SKIP nested negotiations");
       return;
     }
+    global.isNegotiating = true;
 
     try {
       const sdpOffer = await pcSend.createOffer();
