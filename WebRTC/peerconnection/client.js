@@ -10,6 +10,11 @@ const global = {
 
   // Memory used to calculate averages and rates.
   printWebRtcStats: { bytesSent: 0 },
+
+  // Workaround for Chrome bug #740501: skip nested negotiations.
+  // - https://bugs.chromium.org/p/chromium/issues/detail?id=740501
+  // - https://stackoverflow.com/questions/48963787/failed-to-set-local-answer-sdp-called-in-wrong-state-kstable/49055883#49055883
+  isNegotiating: false,
 };
 
 // HTML UI elements
@@ -122,6 +127,12 @@ function startWebrtcSdp() {
   pcSend.addEventListener("negotiationneeded", async () => {
     console.log("[on pcSend.negotiationneeded]");
 
+    if (global.isNegotiating) {
+      console.log("Chrome bug #740501 - SKIP");
+      return;
+    }
+    global.isNegotiating = true;
+
     try {
       const sdpOffer = await pcSend.createOffer();
       await pcSend.setLocalDescription(sdpOffer);
@@ -135,6 +146,10 @@ function startWebrtcSdp() {
     } catch (err) {
       console.error("[on pcSend.negotiationneeded] Error:", err);
     }
+  });
+
+  pcSend.addEventListener("signalingstatechange", () => {
+    global.isNegotiating = pcSend.signalingState != "stable";
   });
 
   pcRecv.addEventListener("iceconnectionstatechange", () => {
