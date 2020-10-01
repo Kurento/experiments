@@ -14,8 +14,8 @@
     <h1>WebRTC demo - PeerConnection</h1>
 
     <div>
-      <button id="uiStartWebrtc">Start WebRTC</button>
-      <button id="uiStopWebrtc">Stop WebRTC</button>
+      <button id="uiStart">Start</button>
+      <button id="uiStop">Stop</button>
     </div>
 
     <div>
@@ -23,9 +23,8 @@
       <video
         id="uiLocalVideo"
         style="width: 320px"
-        playsinline
-        autoplay
         muted
+        playsinline
       ></video>
     </div>
 
@@ -35,8 +34,12 @@
         id="uiRemoteVideo"
         style="width: 320px"
         playsinline
-        autoplay
       ></video>
+    </div>
+
+    <div>
+      <h2>Console</h2>
+      <div id="uiConsole"></div>
     </div>
 
     <script src="https://webrtchacks.github.io/adapter/adapter-latest.js"></script>

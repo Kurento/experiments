@@ -17,17 +17,20 @@ const global = {
 
 const ui = {
   // Inputs
-  startWebrtc: document.getElementById("uiStartWebrtc"),
-  stopWebrtc: document.getElementById("uiStopWebrtc"),
+  start: document.getElementById("uiStart"),
+  stop: document.getElementById("uiStop"),
 
   // Video
   localVideo: document.getElementById("uiLocalVideo"),
   remoteVideo: document.getElementById("uiRemoteVideo"),
+
+  // Debug
+  console: document.getElementById("uiConsole"),
 };
 
-ui.stopWebrtc.disabled = true;
-ui.startWebrtc.addEventListener("click", startWebrtc);
-ui.stopWebrtc.addEventListener("click", stopWebrtc);
+ui.start.addEventListener("click", startWebrtc);
+ui.stop.addEventListener("click", stopWebrtc);
+ui.stop.disabled = true;
 
 window.addEventListener("load", () => {
   console.log("[on window.load] Page loaded");
@@ -48,6 +51,21 @@ window.addEventListener("beforeunload", () => {
   console.log("[on window.beforeunload] Page unloading");
 });
 
+// Send all logs to both console and UI.
+{
+  const logMethod = console.log;
+  const logMessages = [];
+
+  console.log = function () {
+    logMessages.push.apply(logMessages, arguments);
+    ui.console.innerHTML = logMessages.reduce(
+      (acc, cur) => acc + cur + "<br>",
+      ""
+    );
+    logMethod.apply(console, arguments);
+  };
+}
+
 // START implementation
 // ====================
 
@@ -65,8 +83,8 @@ async function startWebrtc() {
   await startWebrtcStats();
 
   // Update UI.
-  ui.startWebrtc.disabled = true;
-  ui.stopWebrtc.disabled = false;
+  ui.start.disabled = true;
+  ui.stop.disabled = false;
 }
 
 function startWebrtcPc() {
@@ -76,31 +94,25 @@ function startWebrtcPc() {
   const pcRecv = new RTCPeerConnection();
   global.pcRecv = pcRecv;
 
-  pcSend.addEventListener("icecandidate", async (iceEvent) => {
+  async function onIceCandidate(iceEvent, pc) {
     if (iceEvent.candidate) {
       // Send the candidate to the remote peer.
       try {
-        await pcRecv.addIceCandidate(iceEvent.candidate);
-      } catch (err) {
-        console.error("[on pcSend.icecandidate] Error:", err);
+        await pc.addIceCandidate(iceEvent.candidate);
+      } catch (error) {
+        console.error("[onIceCandidate] Error:", error);
       }
     } else {
-      console.log("[on pcSend.icecandidate] All ICE candidates have been sent");
+      console.log("[onIceCandidate] All ICE candidates have been sent");
     }
-  });
+  }
 
-  pcRecv.addEventListener("icecandidate", async (iceEvent) => {
-    if (iceEvent.candidate) {
-      // Send the candidate to the remote peer.
-      try {
-        await pcSend.addIceCandidate(iceEvent.candidate);
-      } catch (err) {
-        console.error("[on pcRecv.icecandidate] Error:", err);
-      }
-    } else {
-      console.log("[on pcRecv.icecandidate] All ICE candidates have been sent");
-    }
-  });
+  pcSend.addEventListener("icecandidate", (iceEvent) =>
+    onIceCandidate(iceEvent, pcRecv)
+  );
+  pcRecv.addEventListener("icecandidate", (iceEvent) =>
+    onIceCandidate(iceEvent, pcSend)
+  );
 }
 
 function startWebrtcSdp() {
@@ -142,9 +154,11 @@ async function startWebrtcMedia() {
       `[on pcRecv.track] kind: ${trackEvent.track.kind}, direction: ${trackEvent.transceiver.direction}`
     );
 
-    // Show the stream.
-    // This starts automatically because the <video> element is "autoplay".
+    // Show the stream and start playback.
+    // NOTE: Playback doesn't start automatically because the <video> element
+    // is not "autoplay", which is an attribute that we recommend avoiding.
     ui.remoteVideo.srcObject = trackEvent.streams[0];
+    ui.remoteVideo.play();
   });
 
   let localStream;
@@ -158,9 +172,11 @@ async function startWebrtcMedia() {
     return;
   }
 
-  // Show the stream.
-  // This starts automatically because the <video> element is "autoplay".
+  // Show the stream and start playback.
+  // NOTE: Playback doesn't start automatically because the <video> element
+  // is not "autoplay", which is an attribute that we recommend avoiding.
   ui.localVideo.srcObject = localStream;
+  ui.localVideo.play();
 
   // Add the new tracks to the sender PeerConnection.
   for (const track of localStream.getTracks()) {
@@ -260,20 +276,21 @@ function printWebRtcStats(statsMap) {
 // ===================
 
 function stopWebrtc() {
+  clearInterval(global.statsInterval);
+
   ui.localVideo.pause();
   ui.localVideo.srcObject = null;
   ui.remoteVideo.pause();
   ui.remoteVideo.srcObject = null;
 
-  clearInterval(global.statsInterval);
   global.pcSend.close();
   global.pcSend = null;
   global.pcRecv.close();
   global.pcRecv = null;
 
   // Update UI.
-  ui.startWebrtc.disabled = false;
-  ui.stopWebrtc.disabled = true;
+  ui.start.disabled = false;
+  ui.stop.disabled = true;
 
   console.log("[stopWebrtc] Stopped");
 }
