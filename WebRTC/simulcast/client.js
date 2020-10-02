@@ -179,9 +179,11 @@ async function startWebrtcMedia() {
   const pcRecv = global.pcRecv;
 
   pcRecv.addEventListener("track", (trackEvent) => {
-    console.log(
-      `[on pcRecv.track] kind: ${trackEvent.track.kind}, direction: ${trackEvent.transceiver.direction}`
-    );
+    const kind = trackEvent.track.kind;
+    const direction = trackEvent.transceiver
+      ? trackEvent.transceiver.direction
+      : "unknown";
+    console.log(`[on pcRecv.track] kind: ${kind}, direction: ${direction}`);
 
     // Show the stream.
     // This starts automatically because the <video> element is "autoplay".
@@ -216,14 +218,14 @@ async function startWebrtcMedia() {
     }
 
     // NOTE: addTransceiver() triggers event "negotiationneeded".
-    const tc = pcSend.addTransceiver(track, tcInit);
+    const transceiver = pcSend.addTransceiver(track, tcInit);
 
     if (track.kind === "video" && !global.tcSendVideo) {
-      global.tcSendVideo = tc;
+      global.tcSendVideo = transceiver;
     }
 
     console.log(
-      `[pcSend.addTransceiver] kind: ${track.kind}, direction: ${tc.direction}`
+      `[pcSend.addTransceiver] kind: ${track.kind}, direction: ${transceiver.direction}`
     );
   }
 }
