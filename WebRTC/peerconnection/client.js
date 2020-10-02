@@ -164,9 +164,11 @@ async function startWebrtcMedia() {
   const pcRecv = global.pcRecv;
 
   pcRecv.addEventListener("track", (trackEvent) => {
-    console.log(
-      `[on pcRecv.track] kind: ${trackEvent.track.kind}, direction: ${trackEvent.transceiver.direction}`
-    );
+    const kind = trackEvent.track.kind;
+    const direction = trackEvent.transceiver
+      ? trackEvent.transceiver.direction
+      : "unknown";
+    console.log(`[on pcRecv.track] kind: ${kind}, direction: ${direction}`);
 
     // Show the stream and start playback.
     // NOTE: Playback doesn't start automatically because the <video> element
@@ -200,9 +202,12 @@ async function startWebrtcMedia() {
     const sender = pcSend.addTrack(track, localStream);
 
     // Log the new track and its corresponding transceiver's direction.
-    const tc = pcSend.getTransceivers().find((tc) => tc.sender == sender);
+    const transceiver = pcSend
+      .getTransceivers()
+      .find((tc) => tc.sender === sender);
+    const direction = transceiver ? transceiver.direction : "unknown";
     console.log(
-      `[pcSend.addTrack] kind: ${track.kind}, direction: ${tc.direction}`
+      `[pcSend.addTrack] kind: ${track.kind}, direction: ${direction}`
     );
   }
 }
