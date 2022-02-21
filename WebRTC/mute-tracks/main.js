@@ -20,7 +20,9 @@ const ui = {
   disableAudio: document.getElementById("disableAudio"),
   disableVideo: document.getElementById("disableVideo"),
   replaceAudio: document.getElementById("replaceAudio"),
+  replaceAudioInput: document.getElementById("replaceAudioInput"),
   replaceVideo: document.getElementById("replaceVideo"),
+  replaceVideoInput: document.getElementById("replaceVideoInput"),
   removeAudio: document.getElementById("removeAudio"),
   removeVideo: document.getElementById("removeVideo"),
 
@@ -49,9 +51,10 @@ ui.removeVideo.onclick = () => removeTrack(ui.removeVideo.checked, false);
 // ============
 
 class MediaVars {
-  constructor(uiDisable, uiReplace, uiRemove, track, sender) {
+  constructor(uiDisable, uiReplace, uiReplaceInput, uiRemove, track, sender) {
     this.uiDisable = uiDisable || null; // <input type="checkbox">
     this.uiReplace = uiReplace || null; // <input type="checkbox">
+    this.uiReplaceInput = uiReplaceInput || null; // <select>
     this.uiRemove = uiRemove || null; // <input type="checkbox">
     this.track = track || null; // MediaStreamTrack
     this.sender = sender || null; // RTCRtpSender
@@ -64,85 +67,24 @@ const pcRemote = new RTCPeerConnection();
 const audioVars = new MediaVars(
   ui.disableAudio,
   ui.replaceAudio,
+  ui.replaceAudioInput,
   ui.removeAudio
 );
 const videoVars = new MediaVars(
   ui.disableVideo,
   ui.replaceVideo,
+  ui.replaceVideoInput,
   ui.removeVideo
 );
 
 // ----------------------------------------------------------------------------
 
 async function start() {
-  await startMedia();
   await startWebRTC();
-}
+  await startMedia();
 
-async function startMedia() {
-  const useVideo = ui.useVideo.checked;
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: useVideo,
-      audio: true,
-    });
-    ui.localVideo.srcObject = stream;
-
-    // Save the audio track
-    {
-      audioVars.track = stream.getAudioTracks()[0];
-      audioVars.sender = pcLocal.addTrack(audioVars.track, stream);
-      // pc.addTrack() triggers "negotiationneeded"
-    }
-
-    // Save the video track
-    if (useVideo) {
-      videoVars.track = stream.getVideoTracks()[0];
-      videoVars.sender = pcLocal.addTrack(videoVars.track, stream);
-      // pc.addTrack() triggers "negotiationneeded"
-    }
-  } catch (error) {
-    log("[getUserMedia] Error: " + error);
-  }
-
-  // Program regular updating of stats
-  setInterval(
-    () =>
-      Promise.all([pcLocal.getStats(), pcRemote.getStats()])
-        .then(([s1, s2]) => {
-          let str = "";
-          s1.forEach((stat) => {
-            if (stat.type == "outbound-rtp" && !stat.isRemote) {
-              str += "<h4>Sender side</h4>" + dumpStats(stat);
-            }
-          });
-          s2.forEach((stat) => {
-            if (stat.type == "inbound-rtp" && !stat.isRemote) {
-              str += "<h4>Receiver side</h4>" + dumpStats(stat);
-            }
-          });
-          update(ui.stats, "<small>" + str + "</small>");
-        })
-        .catch((error) => log(error)),
-    100
-  );
-
-  // Update UI
-  ui.useVideo.disabled = true;
-  ui.logSdp.disabled = true;
-  ui.forceSendonly.disabled = true;
-  ui.start.disabled = true;
-  {
-    ui.disableAudio.disabled = false;
-    ui.replaceAudio.disabled = false;
-    ui.removeAudio.disabled = false;
-  }
-  if (useVideo) {
-    ui.disableVideo.disabled = false;
-    ui.replaceVideo.disabled = false;
-    ui.removeVideo.disabled = false;
-  }
+  // This one requires a Secure Context, i.e. an HTTPS server.
+  await queryReplaceDevices();
 }
 
 async function startWebRTC() {
@@ -186,7 +128,7 @@ async function startWebRTC() {
       log("[onnegotiationneeded] pcLocal.setRemoteDescription()");
       await pcLocal.setRemoteDescription(pcRemote.localDescription);
     } catch (error) {
-      log("[onnegotiationneeded] Error: " + error);
+      log(`ERROR [onnegotiationneeded] ${error}`);
     }
   };
 
@@ -197,6 +139,105 @@ async function startWebRTC() {
   pcRemote.ontrack = (trackEvent) => {
     ui.remoteVideo.srcObject = trackEvent.streams[0];
   };
+}
+
+async function startMedia() {
+  const useVideo = ui.useVideo.checked;
+
+  // Get default stream tracks
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: useVideo,
+      audio: true,
+    });
+    ui.localVideo.srcObject = stream;
+
+    // Save the audio track
+    {
+      audioVars.track = stream.getAudioTracks()[0];
+      audioVars.sender = pcLocal.addTrack(audioVars.track, stream);
+      // pc.addTrack() triggers "negotiationneeded"
+    }
+
+    // Save the video track
+    if (useVideo) {
+      videoVars.track = stream.getVideoTracks()[0];
+      videoVars.sender = pcLocal.addTrack(videoVars.track, stream);
+      // pc.addTrack() triggers "negotiationneeded"
+    }
+  } catch (error) {
+    log(`ERROR [getUserMedia] ${error}`);
+  }
+
+  // Program regular updating of stats
+  setInterval(
+    () =>
+      Promise.all([pcLocal.getStats(), pcRemote.getStats()])
+        .then(([s1, s2]) => {
+          let str = "";
+          s1.forEach((stat) => {
+            if (stat.type == "outbound-rtp" && !stat.isRemote) {
+              str += "<h4>Sender side</h4>" + dumpStats(stat);
+            }
+          });
+          s2.forEach((stat) => {
+            if (stat.type == "inbound-rtp" && !stat.isRemote) {
+              str += "<h4>Receiver side</h4>" + dumpStats(stat);
+            }
+          });
+          update(ui.stats, "<small>" + str + "</small>");
+        })
+        .catch((error) => log(`ERROR ${error}`)),
+    100
+  );
+
+  // Update UI
+  ui.useVideo.disabled = true;
+  ui.logSdp.disabled = true;
+  ui.forceSendonly.disabled = true;
+  ui.start.disabled = true;
+  {
+    ui.disableAudio.disabled = false;
+    ui.replaceAudio.disabled = false;
+    ui.removeAudio.disabled = false;
+  }
+  if (useVideo) {
+    ui.disableVideo.disabled = false;
+    ui.replaceVideo.disabled = false;
+    ui.removeVideo.disabled = false;
+  }
+}
+
+async function queryReplaceDevices() {
+  for (const select of [ui.replaceAudioInput, ui.replaceVideoInput]) {
+    const option = document.createElement("option");
+    option.value = "null";
+    option.text = "null";
+    select.appendChild(option);
+  }
+
+  let devices = [];
+  try {
+    // getUserMedia() must have been run at least once BEFORE enumerateDevices()
+    devices = await navigator.mediaDevices.enumerateDevices();
+  } catch (error) {
+    log(`ERROR [enumerateDevices] ${error}`);
+  }
+  for (const device of devices) {
+    console.log(device);
+
+    const option = document.createElement("option");
+    option.value = device.deviceId;
+    if (device.kind === "audioinput") {
+      // prettier-ignore
+      option.text = `${device.label || "Unknown Microphone " + (ui.replaceAudioInput.length)}`;
+      ui.replaceAudioInput.appendChild(option);
+    } else if (device.kind === "videoinput") {
+      // prettier-ignore
+      option.text = `${device.label || "Unknown Camera " + (ui.replaceVideoInput.length)}`;
+      ui.replaceVideoInput.appendChild(option);
+    }
+  }
 }
 
 /*
@@ -224,24 +265,76 @@ function disableTrack(isActive, isAudio) {
 async function replaceTrack(isActive, isAudio) {
   const vars = isAudio ? audioVars : videoVars;
 
+  // prettier-ignore
+  log(`[replaceTrack] Set ${isAudio ? "AUDIO" : "VIDEO"} REPLACE ${isActive ? "ON" : "OFF"}`);
+
   let newTrack;
   if (isActive) {
-    newTrack = null;
+    const deviceId = vars.uiReplaceInput.value;
+    if (deviceId === "null") {
+      newTrack = null;
+    } else {
+      // MediaStreamConstraints
+      const constraints = {
+        audio: isAudio ? { deviceId: { exact: deviceId } } : false,
+        video: !isAudio ? { deviceId: { exact: deviceId } } : false,
+      };
+
+      let newStream;
+      let retry = true;
+      while (true) {
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+          if (error.name === "NotReadableError" && retry) {
+            // Workaround for Firefox bug #1238038
+            // https://bugzilla.mozilla.org/show_bug.cgi?id=1238038
+            log(
+              "[replaceTrack] Workaround for Firefox bug #1238038 -- WARNING: the track replacement cannot be undone"
+            );
+
+            // Firefox can only use 1 hardware device at the same time.
+            // Because in this demo there is only 1 MediaStreamTrack making use
+            // of any given source, stopping it will actually release the hardware.
+            // WARNING: This is final. The original track is ended (`track.readyState === "ended"`),
+            // so with this workaround, the track replacement cannot be undone.
+            // Potential fix: A new `getUserMedia` call would be needed to undo this replacement.
+            // Better fix: Wait until Firefox fixes its bug.
+            vars.track.stop();
+
+            // Try again, only once
+            retry = false;
+            continue;
+          } else {
+            log(`ERROR [getUserMedia] ${error}`);
+
+            // Update UI (rollback)
+            vars.uiReplace.checked = !isActive;
+
+            return;
+          }
+        }
+        break;
+      }
+
+      if (isAudio) {
+        newTrack = newStream.getAudioTracks()[0];
+      } else {
+        newTrack = newStream.getVideoTracks()[0];
+      }
+    }
   } else {
     newTrack = vars.track;
   }
-
-  // prettier-ignore
-  log(`[replaceTrack] Set ${isAudio ? "AUDIO" : "VIDEO"} REPLACE ${isActive ? "ON" : "OFF"}`);
 
   try {
     await vars.sender.replaceTrack(newTrack);
   } catch (error) {
     if (error.name === "InvalidModificationError") {
       // prettier-ignore
-      log("[replaceTrack] Error in sender.replaceTrack(): Renegotiation needed, error: " + error);
+      log(`ERROR [replaceTrack] Renegotiation needed; ${error}`);
     } else {
-      log("[replaceTrack] Error in sender.replaceTrack(): " + error);
+      log(`ERROR [replaceTrack] ${error}`);
     }
 
     // Update UI (rollback)
@@ -275,7 +368,7 @@ function removeTrack(isActive, isAudio) {
       // The local media section in SDP will have an incompatible direction,
       // forcing the remote side to answer with `a=inactive`.
     } catch (error) {
-      log("[removeTrack] Error in pcLocal.removeTrack(): " + error);
+      log(`ERROR [removeTrack] ${error}`);
 
       // Update UI (rollback)
       vars.uiRemove.checked = !isActive;
@@ -287,7 +380,7 @@ function removeTrack(isActive, isAudio) {
       vars.sender = pcLocal.addTrack(vars.track, stream);
       // pc.addTrack() triggers "negotiationneeded"
     } catch (error) {
-      log("[removeTrack] Error in pcLocal.addTrack(): " + error);
+      log(`ERROR [addTrack] ${error}`);
 
       // Update UI (rollback)
       vars.uiRemove.checked = !isActive;
