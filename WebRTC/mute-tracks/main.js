@@ -7,13 +7,12 @@
 
 const ui = {
   // Video
-  localVideo: document.getElementById("localVideo"),
-  remoteVideo: document.getElementById("remoteVideo"),
+  videoSend: document.getElementById("videoSend"),
+  videoRecv: document.getElementById("videoRecv"),
 
   // Settings
   useVideo: document.getElementById("useVideo"),
   logSdp: document.getElementById("logSdp"),
-  forceSendonly: document.getElementById("forceSendonly"),
 
   // Controls
   start: document.getElementById("start"),
@@ -33,7 +32,6 @@ const ui = {
 };
 
 ui.useVideo.checked = true;
-ui.forceSendonly.checked = true;
 
 ui.start.onclick = async () => await start();
 ui.disableAudio.onclick = () => disableTrack(ui.disableAudio.checked, true);
@@ -62,8 +60,8 @@ class MediaVars {
 }
 
 let stream = null;
-const pcLocal = new RTCPeerConnection();
-const pcRemote = new RTCPeerConnection();
+const pcSend = new RTCPeerConnection();
+const pcRecv = new RTCPeerConnection();
 const audioVars = new MediaVars(
   ui.disableAudio,
   ui.replaceAudio,
@@ -82,65 +80,53 @@ const videoVars = new MediaVars(
 async function start() {
   await startWebRTC();
   await startMedia();
-
-  // This one requires a Secure Context, i.e. an HTTPS server.
-  await queryReplaceDevices();
+  await queryReplaceDevices(); // Requires a Secure Context, i.e. an HTTPS server.
 }
 
+/*
+ * Initialize WebRTC PeerConnection event handlers.
+ */
 async function startWebRTC() {
   const addCandidate = (pc, c) => c && pc.addIceCandidate(c).catch(log);
-  pcLocal.onicecandidate = (iceEvent) =>
-    addCandidate(pcRemote, iceEvent.candidate);
-  pcRemote.onicecandidate = (iceEvent) =>
-    addCandidate(pcLocal, iceEvent.candidate);
+  pcSend.onicecandidate = (iceEvent) =>
+    addCandidate(pcRecv, iceEvent.candidate);
+  pcRecv.onicecandidate = (iceEvent) =>
+    addCandidate(pcSend, iceEvent.candidate);
 
-  pcLocal.onnegotiationneeded = async (_event) => {
-    const options = {};
-    if (ui.forceSendonly.checked) {
-      options.offerToReceiveAudio = false;
-      options.offerToReceiveVideo = false;
-    }
-
+  pcSend.onnegotiationneeded = async (_event) => {
     try {
-      log("[onnegotiationneeded] pcLocal.createOffer()");
-      const sdpOffer = await pcLocal.createOffer(options);
+      log("[pcSend.onnegotiationneeded] New SDP Offer/Answer negotiation");
+
+      const sdpOffer = await pcSend.createOffer();
+      await pcSend.setLocalDescription(sdpOffer);
+      await pcRecv.setRemoteDescription(pcSend.localDescription);
+      const sdpAnswer = await pcRecv.createAnswer();
+      await pcRecv.setLocalDescription(sdpAnswer);
+      await pcSend.setRemoteDescription(pcRecv.localDescription);
+
       if (ui.logSdp.checked) {
         // prettier-ignore
-        console.log(`[onnegotiationneeded] pcLocal SDP Offer:\n${sdpOffer.sdp}`);
-      }
-
-      log("[onnegotiationneeded] pcLocal.setLocalDescription()");
-      await pcLocal.setLocalDescription(sdpOffer);
-
-      log("[onnegotiationneeded] pcRemote.setRemoteDescription()");
-      await pcRemote.setRemoteDescription(pcLocal.localDescription);
-
-      log("[onnegotiationneeded] pcRemote.createAnswer()");
-      const sdpAnswer = await pcRemote.createAnswer();
-      if (ui.logSdp.checked) {
+        console.log(`[pcSend.onnegotiationneeded] SDP Offer:\n${sdpOffer.sdp}`);
         // prettier-ignore
-        console.log(`[onnegotiationneeded] pcRemote SDP Answer:\n${sdpAnswer.sdp}`);
+        console.log(`[pcSend.onnegotiationneeded] SDP Answer:\n${sdpAnswer.sdp}`);
       }
-
-      log("[onnegotiationneeded] pcRemote.setLocalDescription()");
-      await pcRemote.setLocalDescription(sdpAnswer);
-
-      log("[onnegotiationneeded] pcLocal.setRemoteDescription()");
-      await pcLocal.setRemoteDescription(pcRemote.localDescription);
     } catch (error) {
-      log(`ERROR [onnegotiationneeded] ${error}`);
+      log(`ERROR [pcSend.onnegotiationneeded] ${error}`);
     }
   };
 
-  pcRemote.oniceconnectionstatechange = () => {
-    update(ui.state, pcRemote.iceConnectionState);
+  pcRecv.oniceconnectionstatechange = () => {
+    update(ui.state, pcRecv.iceConnectionState);
   };
 
-  pcRemote.ontrack = (trackEvent) => {
-    ui.remoteVideo.srcObject = trackEvent.streams[0];
+  pcRecv.ontrack = (trackEvent) => {
+    ui.videoRecv.srcObject = trackEvent.streams[0];
   };
 }
 
+/*
+ * Request user media and add it to WebRTC PeerConnection.
+ */
 async function startMedia() {
   const useVideo = ui.useVideo.checked;
 
@@ -150,20 +136,30 @@ async function startMedia() {
       video: useVideo,
       audio: true,
     });
-    ui.localVideo.srcObject = stream;
+    ui.videoSend.srcObject = stream;
 
     // Save the audio track
     {
-      audioVars.track = stream.getAudioTracks()[0];
-      audioVars.sender = pcLocal.addTrack(audioVars.track, stream);
-      // pc.addTrack() triggers "negotiationneeded"
+      // Triggers "negotiationneeded"
+      const tc = pcSend.addTransceiver(stream.getAudioTracks()[0], {
+        direction: "sendonly",
+        streams: [stream],
+      });
+
+      audioVars.track = tc.sender.track;
+      audioVars.sender = tc.sender;
     }
 
     // Save the video track
     if (useVideo) {
-      videoVars.track = stream.getVideoTracks()[0];
-      videoVars.sender = pcLocal.addTrack(videoVars.track, stream);
-      // pc.addTrack() triggers "negotiationneeded"
+      // Triggers "negotiationneeded"
+      const tc = pcSend.addTransceiver(stream.getVideoTracks()[0], {
+        direction: "sendonly",
+        streams: [stream],
+      });
+
+      videoVars.track = tc.sender.track;
+      videoVars.sender = tc.sender;
     }
   } catch (error) {
     log(`ERROR [getUserMedia] ${error}`);
@@ -172,7 +168,7 @@ async function startMedia() {
   // Program regular updating of stats
   setInterval(
     () =>
-      Promise.all([pcLocal.getStats(), pcRemote.getStats()])
+      Promise.all([pcSend.getStats(), pcRecv.getStats()])
         .then(([s1, s2]) => {
           let str = "";
           s1.forEach((stat) => {
@@ -194,7 +190,6 @@ async function startMedia() {
   // Update UI
   ui.useVideo.disabled = true;
   ui.logSdp.disabled = true;
-  ui.forceSendonly.disabled = true;
   ui.start.disabled = true;
   {
     ui.disableAudio.disabled = false;
@@ -208,11 +203,17 @@ async function startMedia() {
   }
 }
 
+/*
+ * Request IDs for all media devices.
+ * Requires a Secure Context:
+ * - Page must be served through HTTPS.
+ * - User must have granted consent from a call to `getUserMedia()`.
+ */
 async function queryReplaceDevices() {
   for (const select of [ui.replaceAudioInput, ui.replaceVideoInput]) {
     const option = document.createElement("option");
     option.value = "null";
-    option.text = "null";
+    option.text = "null (mute track)";
     select.appendChild(option);
   }
 
@@ -363,8 +364,9 @@ function removeTrack(isActive, isAudio) {
 
   if (isActive) {
     try {
-      pcLocal.removeTrack(vars.sender);
-      // pc.removeTrack() triggers "negotiationneeded"
+      // Triggers "negotiationneeded"
+      pcSend.removeTrack(vars.sender);
+
       // The local media section in SDP will have an incompatible direction,
       // forcing the remote side to answer with `a=inactive`.
     } catch (error) {
@@ -377,8 +379,8 @@ function removeTrack(isActive, isAudio) {
     }
   } else {
     try {
-      vars.sender = pcLocal.addTrack(vars.track, stream);
-      // pc.addTrack() triggers "negotiationneeded"
+      // Triggers "negotiationneeded"
+      vars.sender = pcSend.addTrack(vars.track, stream);
     } catch (error) {
       log(`ERROR [addTrack] ${error}`);
 

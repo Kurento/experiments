@@ -1,53 +1,108 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>Test - negotiation</title>
-</head>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<body>
-  <p>Videos:</p>
-  <video id="localVideo" width="320" height="240" autoplay controls playsinline muted></video>
-  <video id="remoteVideo" width="320" height="240" autoplay controls playsinline></video>
-  <br>
+    <!-- Disable favicon -->
+    <link rel="icon" href="data:," />
 
-  <p>Settings:</p>
-  <label><input type="checkbox" id="useVideo">Start with a VIDEO track (otherwise audio only)</label>
-  <br>
-  <label><input type="checkbox" id="logSdp">Log whole SDP messages</label>
-  <br>
-  <label><input type="checkbox" id="forceSendonly">Force sendonly/recvonly in SDP (otherwise sendrecv)</label>
-  <br>
+    <title>WebRTC demo - Mute Tracks</title>
+  </head>
 
-  <p>Controls:</p>
-  <table><tr>
-    <td><button id="start">Start</button></td>
-    <td>State: <div id="state"></div></td>
-  </tr></table>
-  <br>
-  <label><input type="checkbox" id="disableAudio" disabled>Disable local AUDIO track</label>
-  <br>
-  <label><input type="checkbox" id="disableVideo" disabled>Disable local VIDEO track</label>
-  <br>
-  <label><input type="checkbox" id="replaceAudio" disabled>Replace local AUDIO track</label>
-  <label>With:<select id="replaceAudioInput"></select></label>
-  <br>
-  <label><input type="checkbox" id="replaceVideo" disabled>Replace local VIDEO track</label>
-  <label>With:<select id="replaceVideoInput"></select></label>
-  <br>
-  <label><input type="checkbox" id="removeAudio" disabled>Remove local AUDIO track</label>
-  <br>
-  <label><input type="checkbox" id="removeVideo" disabled>Remove local VIDEO track</label>
-  <br>
+  <body>
+    <h1>WebRTC demo - Mute Tracks</h1>
 
-  <p>Log:</p>
-  <div id="log"></div>
-  <br>
+    <table>
+      <tr>
+        <th>Local video (from camera)</th>
+        <th>Remote video</th>
+      </tr>
+      <tr>
+        <td>
+          <video
+            id="videoSend"
+            style="width: 320px"
+            autoplay
+            controls
+            muted
+            playsinline
+          ></video>
+        </td>
+        <td>
+          <video
+            id="videoRecv"
+            style="width: 320px"
+            autoplay
+            controls
+            playsinline
+          ></video>
+        </td>
+      </tr>
+    </table>
 
-  <p>Stats:</p>
-  <div id="stats"></div>
+    <h2>Settings</h2>
+    <label>
+      <input type="checkbox" id="useVideo" />
+      Start with a VIDEO track (otherwise audio only)
+    </label>
+    <br />
+    <label>
+      <input type="checkbox" id="logSdp" />
+      Log whole SDP messages
+    </label>
 
-  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
-  <script src="main.js"></script>
-</body>
+    <h2>Controls</h2>
+    <table>
+      <tr>
+        <td><button id="start">Start</button></td>
+        <td>
+          State:
+          <div id="state"></div>
+        </td>
+      </tr>
+    </table>
+    <br />
+    <label>
+      <input type="checkbox" id="disableAudio" disabled />
+      Disable local AUDIO track
+    </label>
+    <br />
+    <label>
+      <input type="checkbox" id="disableVideo" disabled />
+      Disable local VIDEO track
+    </label>
+    <br />
+    <label>
+      <input type="checkbox" id="replaceAudio" disabled />
+      Replace local AUDIO track
+    </label>
+    <label>With:<select id="replaceAudioInput"></select></label>
+    <br />
+    <label>
+      <input type="checkbox" id="replaceVideo" disabled />
+      Replace local VIDEO track
+    </label>
+    <label>With:<select id="replaceVideoInput"></select></label>
+    <br />
+    <label>
+      <input type="checkbox" id="removeAudio" disabled />
+      Remove local AUDIO track
+    </label>
+    <br />
+    <label>
+      <input type="checkbox" id="removeVideo" disabled />
+      Remove local VIDEO track
+    </label>
+    <br />
+
+    <h2>Log</h2>
+    <div id="log"></div>
+
+    <h2>Stats</h2>
+    <div id="stats"></div>
+
+    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+    <script src="main.js"></script>
+  </body>
 </html>
