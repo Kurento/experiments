@@ -43,7 +43,7 @@ import org.kurento.jsonrpc.JsonUtils;
 import org.kurento.client.ConnectionStateChangedEvent;
 import org.kurento.client.ErrorEvent;
 import org.kurento.client.IceCandidateFoundEvent;
-import org.kurento.client.IceComponentStateChangeEvent;
+import org.kurento.client.IceComponentStateChangedEvent;
 import org.kurento.client.IceGatheringDoneEvent;
 import org.kurento.client.MediaFlowInStateChangeEvent;
 import org.kurento.client.MediaFlowOutStateChangeEvent;
@@ -288,10 +288,10 @@ public class Handler extends TextWebSocketHandler
     });
 
     // Event: The ICE backend changed state
-    webRtcEp.addIceComponentStateChangeListener(
-        new EventListener<IceComponentStateChangeEvent>() {
+    webRtcEp.addIceComponentStateChangedListener(
+        new EventListener<IceComponentStateChangedEvent>() {
       @Override
-      public void onEvent(IceComponentStateChangeEvent ev) {
+      public void onEvent(IceComponentStateChangedEvent ev) {
         log.debug("[WebRtcEndpoint::{}] source: {}, timestamp: {}, tags: {}, streamId: {}, componentId: {}, state: {}",
             ev.getType(), ev.getSource().getName(), ev.getTimestamp(),
             ev.getTags(), ev.getStreamId(), ev.getComponentId(), ev.getState());
