@@ -136,13 +136,14 @@ function startWebrtcSdp() {
     try {
       const sdpOffer = await pcSend.createOffer();
       await pcSend.setLocalDescription(sdpOffer);
-      await pcRecv.setRemoteDescription(pcSend.localDescription);
       console.log("[pcSend] SDP Offer:", pcSend.localDescription.sdp);
 
+      await pcRecv.setRemoteDescription(pcSend.localDescription);
       const sdpAnswer = await pcRecv.createAnswer();
       await pcRecv.setLocalDescription(sdpAnswer);
-      await pcSend.setRemoteDescription(pcRecv.localDescription);
       console.log("[pcRecv] SDP Answer:", pcRecv.localDescription.sdp);
+
+      await pcSend.setRemoteDescription(pcRecv.localDescription);
     } catch (err) {
       console.error("[on pcSend.negotiationneeded] Error:", err);
     }
